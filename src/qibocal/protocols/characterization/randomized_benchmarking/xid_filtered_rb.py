@@ -26,7 +26,7 @@ from .utils import extract_from_data, number_to_str
 class XIdRBParameters(StandardRBParameters):
     """XId RB parameters."""
 
-    ndecays: int = 2
+    ndecays: int = None
     """Number of decays to be fit."""
 
     def __post_init__(self):
@@ -50,7 +50,6 @@ class XIdRBResult(Results):
 def setup_scan(
     params: StandardRBParameters,
     qubits: Union[Qubits, list[QubitId]],
-    nqubits: int,
     **kwargs,
 ) -> Iterable:
     """Returns an iterator of single-qubit random self-inverting Clifford circuits.
@@ -59,8 +58,6 @@ def setup_scan(
         params (StandardRBParameters): Parameters of the RB protocol.
         qubits (dict[int, Union[str, int]] or list[Union[str, int]]):
             list of qubits the circuit is executed on.
-        nqubits (int, optional): Number of qubits of the resulting circuits.
-            If ``None``, sets ``len(qubits)``. Defaults to ``None``.
 
     Returns:
         Iterable: The iterator of circuits.
@@ -82,7 +79,7 @@ def setup_scan(
 
         circuit = layer_circuit(layer_gen, depth, **kwargs)
         add_measurement_layer(circuit)
-        return embed_circuit(circuit, nqubits, qubit_ids)
+        return embed_circuit(circuit, params.nqubits, qubit_ids)
 
     return map(make_circuit, params.depths * params.niter)
 
@@ -137,12 +134,17 @@ def _acquisition(
             qibo.set_backend("numpy")
             platform = None
 
-        noise_model = getattr(noisemodels, params.noise_model)(params.noise_params)
+        noise_model = getattr(noisemodels, params.noise_model)(
+            params.noise_params, seed=params.seed
+        )
         params.noise_params = noise_model.params
 
-    # 1. Set up the scan (here an iterator of circuits of random clifford gates with an inverse).
+    # 1. Update nqubits and set up the scan
     nqubits = platform.nqubits if platform else max(qubits) + 1
-    scan = setup_scan(params, qubits, nqubits, density_matrix=(noise_model is not None))
+    params.nqubits = nqubits
+    if params.ndecays is None:
+        params.ndecays = 2**nqubits
+    scan = setup_scan(params, qubits, density_matrix=(noise_model is not None))
 
     # 2. Execute the scan.
     data_list = []
@@ -186,9 +188,10 @@ def _fit(data: RBData) -> XIdRBResult:
         XIdRBResult: Aggregated and processed data.
     """
 
-    # Extract depths and RB signal
+    # Extract depths, RB signal and number of decays
     x, y_scatter = extract_from_data(data, "signal", "depth", list)
     homogeneous = all(len(y_scatter[0]) == len(row) for row in y_scatter)
+    ndecays = data.attrs.get("ndecays", 2 ** data.attrs.get("nqubits", 1))
 
     # Extract fitting and bootstrap parameters if given
     uncertainties = data.attrs.get("uncertainties", None)
@@ -211,7 +214,7 @@ def _fit(data: RBData) -> XIdRBResult:
             else [np.mean(y_iter, axis=0) for y_iter in bootstrap_y]
         )
         popt_estimates = np.apply_along_axis(
-            lambda y_iter: fit_expn_func(x, y_iter, data.attrs.get("ndecays", 2))[0],
+            lambda y_iter: fit_expn_func(x, y_iter, ndecays)[0],
             axis=0,
             arr=np.array(y_estimates),
         )
@@ -225,13 +228,13 @@ def _fit(data: RBData) -> XIdRBResult:
         data_median=y,
         homogeneous=(homogeneous or n_bootstrap != 0),
     )
-    popt, perr = fit_expn_func(x, y, data.attrs.get("ndecays", 2))
+    popt, perr = fit_expn_func(x, y, ndecays)
     # Compute fitting uncertainties
     if len(popt_estimates):
         perr = data_uncertainties(popt_estimates, uncertainties, data_median=popt)
         perr = perr.T if perr is not None else (0,) * len(popt)
 
-    return XIdRBResult(popt, perr, error_bars)
+    return XIdRBResult(popt, perr, np.real(error_bars))
 
 
 def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], str]:
@@ -259,12 +262,13 @@ def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], st
             for k in range(nparams)
         ]
     )
-
+    # Create RB figure with legend on top
     fig = rb_figure(
         data,
         lambda x: np.real(expn_func(x, *popt)),
         fit_label=label,
         error_y=result.error_bars,
+        legend=dict(yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
     meta_data = deepcopy(data.attrs)
@@ -272,6 +276,8 @@ def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], st
     if not meta_data["noise_model"]:
         meta_data.pop("noise_model")
         meta_data.pop("noise_params")
+    elif meta_data.get("noise_params", None) is not None:
+        meta_data["noise_params"] = np.round(meta_data["noise_params"], 3)
 
     table_str = "".join([f" | {key}: {value}<br>" for key, value in meta_data.items()])
     return [fig], table_str

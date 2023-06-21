@@ -360,6 +360,8 @@ def _plot(data: RBData, result: StandardRBResult, qubit) -> tuple[list[go.Figure
     if not meta_data["noise_model"]:
         meta_data.pop("noise_model")
         meta_data.pop("noise_params")
+    elif meta_data.get("noise_params", None) is not None:
+        meta_data["noise_params"] = np.round(meta_data["noise_params"], 3)
 
     table_str = "".join(
         [

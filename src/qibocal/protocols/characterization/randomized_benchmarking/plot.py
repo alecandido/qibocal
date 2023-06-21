@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from .utils import extract_from_data
 
 
-def rb_figure(data, model, fit_label="", signal_label="signal", error_y=None):
+def rb_figure(data, model, fit_label="", signal_label="signal", error_y=None, **kwargs):
     x, y = extract_from_data(data, signal_label, "depth", "mean")
 
     fig = go.Figure()
@@ -71,6 +71,7 @@ def rb_figure(data, model, fit_label="", signal_label="signal", error_y=None):
             line=go.scatter.Line(dash="dot", color="#00cc96"),
         )
     )
+    fig.update_layout(**kwargs)
     return fig
 
 
