@@ -352,7 +352,10 @@ def _plot(data: RBData, result: StandardRBResult, qubit) -> tuple[list[go.Figure
     )
 
     fig = rb_figure(
-        data, lambda x: exp1B_func(x, *popt), fit_label=label, error_y=result.error_bars
+        data,
+        lambda x: exp1B_func(x, *popt),
+        fit_label=label,
+        error_bars=result.error_bars,
     )
 
     meta_data = deepcopy(data.attrs)

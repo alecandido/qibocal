@@ -72,6 +72,8 @@ def esprit(
     # Check for equal spacing.
     if np.any(xdata[1:] - xdata[:-1] != xdata[1] - xdata[0]):
         raise_error(ValueError, "xdata has to be equally spaced.")
+    if xdata.size <= num_decays:
+        raise_error(ValueError, "xdata needs size larger than num_decays.")
     sampleRate = 1 / (xdata[1] - xdata[0])
     # xdata has to be an array.
     xdata = np.array(xdata)

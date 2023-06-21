@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Optional, Union
 
 import numpy as np
 import plotly.graph_objects as go
@@ -6,7 +6,27 @@ import plotly.graph_objects as go
 from .utils import extract_from_data
 
 
-def rb_figure(data, model, fit_label="", signal_label="signal", error_y=None, **kwargs):
+def rb_figure(
+    data,
+    model,
+    fit_label: Optional[str] = "",
+    signal_label: Optional[str] = "signal",
+    error_bars: Optional[Union[float, list, np.ndarray]] = None,
+    **kwargs
+):
+    """Create Figure with RB signal, average values and fitting result.
+
+    Args:
+        data (:class:`RBData`): data of a protocol.
+        model (callable): function that maps 1d array of ``x`` to ``y`` of the fitting result.
+        fit_label (str, optional): label of the fit model in the plot legend.
+        signal_label (str, optonal): name of the signal parameter in ``data``.
+        error_bars (float or list or np.ndarray, optonal): error bars for the averaged signal.
+        **kwargs: passed to the resulting figure's layout.
+
+    Returns:
+        plotly.graph_objects.Figure: resulting RB figure.
+    """
     x, y = extract_from_data(data, signal_label, "depth", "mean")
 
     fig = go.Figure()
@@ -34,28 +54,28 @@ def rb_figure(data, model, fit_label="", signal_label="signal", error_y=None, **
         )
     )
 
-    # If error_y is given, plot the error bars
-    error_y_dict = None
-    if error_y is not None:
+    # If error_bars is given, plot the error bars
+    error_bars_dict = None
+    if error_bars is not None:
         # Constant error bars
-        if isinstance(error_y, Iterable) is False:
-            error_y_dict = {"type": "constant", "value": error_y}
+        if isinstance(error_bars, Iterable) is False:
+            error_bars_dict = {"type": "constant", "value": error_bars}
         # Symmetric error bars
-        elif isinstance(error_y[0], Iterable) is False:
-            error_y_dict = {"type": "data", "array": error_y}
+        elif isinstance(error_bars[0], Iterable) is False:
+            error_bars_dict = {"type": "data", "array": error_bars}
         # Asymmetric error bars
         else:
-            error_y_dict = {
+            error_bars_dict = {
                 "type": "data",
                 "symmetric": False,
-                "array": error_y[1],
-                "arrayminus": error_y[0],
+                "array": error_bars[1],
+                "arrayminus": error_bars[0],
             }
         fig.add_trace(
             go.Scatter(
                 x=x,
                 y=y,
-                error_y=error_y_dict,
+                error_y=error_bars_dict,
                 line={"color": "#aa6464"},
                 mode="markers",
                 name="error bars",

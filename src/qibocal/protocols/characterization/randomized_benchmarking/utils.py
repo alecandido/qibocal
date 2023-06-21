@@ -110,6 +110,9 @@ def number_to_str(
         return "+" if float(val) > -PRECISION_TOL else "-"
 
     def _display(val, dev):
+        # inf uncertainty
+        if np.isinf(dev):
+            return f"{value:.{precision}f}", "inf"
         # Real values
         if not np.iscomplex(val) and not np.iscomplex(dev):
             if dev >= 1e-4:

@@ -73,7 +73,7 @@ def setup_scan(
         # Clifford gates. Could also be a generator, it just has to be callable.
         def layer_gen():
             """Returns a circuit with a random single-qubit clifford unitary."""
-            return [gates.I(*qubits), [gates.X(q) for q in qubits]][
+            return [[gates.I(q) for q in qubits], [gates.X(q) for q in qubits]][
                 np.random.choice([0, 1])
             ]
 
@@ -143,7 +143,7 @@ def _acquisition(
     nqubits = platform.nqubits if platform else max(qubits) + 1
     params.nqubits = nqubits
     if params.ndecays is None:
-        params.ndecays = 2**nqubits
+        params.ndecays = 2 ** len(qubits)
     scan = setup_scan(params, qubits, density_matrix=(noise_model is not None))
 
     # 2. Execute the scan.
@@ -223,18 +223,19 @@ def _fit(data: RBData) -> XIdRBResult:
     y = [np.mean(y_row) for y_row in y_scatter]
     # If bootstrap was not performed, y_estimates can be inhomogeneous
     error_bars = data_uncertainties(
-        y_estimates,
+        np.real(y_estimates),
         uncertainties,
         data_median=y,
         homogeneous=(homogeneous or n_bootstrap != 0),
     )
+
     popt, perr = fit_expn_func(x, y, ndecays)
     # Compute fitting uncertainties
     if len(popt_estimates):
         perr = data_uncertainties(popt_estimates, uncertainties, data_median=popt)
         perr = perr.T if perr is not None else (0,) * len(popt)
 
-    return XIdRBResult(popt, perr, np.real(error_bars))
+    return XIdRBResult(popt, perr, error_bars)
 
 
 def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], str]:
@@ -250,10 +251,6 @@ def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], st
         Tuple[List[go.Figure], str]:
     """
 
-    # Extract depths and RB signal
-    x, y_scatter = extract_from_data(data, "signal", "depth", list)
-    y = [np.mean(row) for row in y_scatter]
-
     popt, perr = result.fit_parameters, result.fit_uncertainties
     nparams = len(popt) // 2
     label = r"Fit: y=\sum_i A_i p_i^x<br>" + "<br>".join(
@@ -267,7 +264,7 @@ def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], st
         data,
         lambda x: np.real(expn_func(x, *popt)),
         fit_label=label,
-        error_y=result.error_bars,
+        error_bars=result.error_bars,
         legend=dict(yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
