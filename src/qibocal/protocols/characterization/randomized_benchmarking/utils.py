@@ -132,8 +132,8 @@ def number_to_str(
         return f"{value:.{precision}f}"
 
     if isinstance(uncertainty, Number):
-        val_display, dev_display = _display(value, uncertainty)
-        return val_display + " \u00B1 " + dev_display
+        value_display, uncertainty_display = _display(value, uncertainty)
+        return value_display + " \u00B1 " + uncertainty_display
 
     # If any uncertainty is None, return the value with precision
     if any(u is None for u in uncertainty):

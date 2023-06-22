@@ -28,8 +28,8 @@ class PauliErrorOnAll(NoiseModel):
         # Check if number of arguments is 0 or 1 and if it's equal to None
         if not probabilities:
             # Assign random values to params.
-            np.random.seed(seed)
-            self.params = np.random.uniform(0, 0.25, size=3)
+            random_generator = np.random.default_rng(seed)
+            self.params = random_generator.uniform(0, 0.25, size=3)
         elif len(probabilities) == 3:
             self.params = probabilities
         else:
@@ -55,18 +55,17 @@ class PauliErrorOnX(PauliErrorOnAll):
 
 
 class UnitaryErrorOnAll(NoiseModel):
-    """Builds a noise model with a unitary error
-    acting on all gates in a Circuit.
+    """Builds a noise model with a random unitary error acting on all gates in a Circuit.
 
-    If parameters are not given,
-    a random unitary close to identity is generated
-    ::math:`U = \\exp(-i t H)` for a random Harmitian matrix ::math:`H`.
+    A random unitary close to identity is generated as ::math:`U = \\exp(-i t H)`
+    for a random Harmitian matrix ::math:`H`.
 
     Args:
-        probabilities (list): list of probabilities corresponding to unitaries. Defualt is [].
-        unitaries (list): list of unitaries. Defualt is [].
-        nqubits (int): number of qubits. Default is 1.
-        t (float): "strength" of random unitary noise. Default is 0.1.
+        args (list, optional): 2-element list ``[nqubits, t]``, where
+            ``nqubits`` is the number of qubits the unitary is acting on,
+            ``t`` is the "strength" of random unitary noise.
+            Defaults to ``[1, 0.1]``.
+        seed (int, optional)
     """
 
     def __init__(self, args: Optional[list] = None, seed: Optional[int] = None) -> None:
@@ -75,13 +74,8 @@ class UnitaryErrorOnAll(NoiseModel):
         nqubits = args[0] if args is not None and len(args) else 1
         t = args[1] if args is not None and len(args) > 1 else 0.1
 
-        if not isinstance(t, float):
-            raise_error(TypeError, f"Parameter `t` must be float, but is {type(t)}.")
-
-        # If unitaries are not given, generate a random Unitary close to Id
-        dim = 2**nqubits
-
         # Generate random unitary matrix close to Id. U=exp(i*t*H)
+        dim = 2**nqubits
         herm_generator = random_hermitian(dim, seed=seed)
         unitary_matr = expm(-1j * t * herm_generator)
         self.params = unitary_matr
@@ -92,11 +86,8 @@ class UnitaryErrorOnAll(NoiseModel):
 
 
 class UnitaryErrorOnX(UnitaryErrorOnAll):
-    """Builds a noise model with a unitary error
-    acting on all gates in a Circuit.
-
-    Inherited from ``UnitaryErrorOnAll`` but the ``build`` method is
-    overwritten to act on X gates.
+    """Builds a noise model with a unitary error acting only on X gates in a Circuit,
+    inherited from ``UnitaryErrorOnAll``.
     """
 
     def build(self):

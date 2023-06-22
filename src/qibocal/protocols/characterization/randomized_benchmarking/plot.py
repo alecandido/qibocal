@@ -100,12 +100,18 @@ def carousel(fig_list: list):
 
     Args:
         fig_list (List[plotly.graph_objects.Figure]): list of ``Plotly`` figures.
+            Resulting figure will have the layout of ``fig_list[0]``, the slider values will
+            correspond to figures' titles if given.
 
     Returns:
         :class:`plotly.graph_objects.Figure`: Carousel figure with a slider.
     """
 
+    # Create a figure with the layout of `fig_list[0]` figure.
     carousel_fig = go.Figure()
+    carousel_fig.update_layout(**fig_list[0].to_dict().get("layout", {}))
+
+    # Record each figure as a step for the slider
     steps = []
     fig_sizes = [len(fig.data) for fig in fig_list]
     for count, fig in enumerate(fig_list):
@@ -139,6 +145,5 @@ def carousel(fig_list: list):
             steps=steps,
         )
     ]
-
     carousel_fig.update_layout(sliders=sliders)
     return carousel_fig

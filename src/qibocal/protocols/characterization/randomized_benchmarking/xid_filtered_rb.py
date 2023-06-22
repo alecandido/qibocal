@@ -29,11 +29,6 @@ class XIdRBParameters(StandardRBParameters):
     ndecays: int = None
     """Number of decays to be fit."""
 
-    def __post_init__(self):
-        super().__post_init__()
-        if self.seed is not None:
-            np.random.seed(self.seed)
-
 
 @dataclass
 class XIdRBResult(Results):
@@ -62,7 +57,7 @@ def setup_scan(
     Returns:
         Iterable: The iterator of circuits.
     """
-
+    random_generator = np.random.default_rng(params.seed)
     qubit_ids = list(qubits) if isinstance(qubits, dict) else qubits
 
     def make_circuit(depth):
@@ -73,9 +68,10 @@ def setup_scan(
         # Clifford gates. Could also be a generator, it just has to be callable.
         def layer_gen():
             """Returns a circuit with a random single-qubit clifford unitary."""
-            return [[gates.I(q) for q in qubits], [gates.X(q) for q in qubits]][
-                np.random.choice([0, 1])
-            ]
+            return [
+                [gates.I(q) for q in range(len(qubit_ids))],
+                [gates.X(q) for q in range(len(qubit_ids))],
+            ][random_generator.choice([0, 1])]
 
         circuit = layer_circuit(layer_gen, depth, **kwargs)
         add_measurement_layer(circuit)

@@ -272,19 +272,6 @@ actions:
   - id: standard rb
     priority: 0
     operation: standard_rb
-    parameters:
-      depths:
-        start: 1
-        stop: 10
-        step: 2
-      niter: 2
-      nshots: 50
-      uncertainties: None
-      n_bootstrap: 0
-
-  - id: standard rb inhomogeneous
-    priority: 0
-    operation: standard_rb
     qubits: [0, 1, 3]
     parameters:
       depths: [1, 3, 3, 5]
@@ -298,31 +285,19 @@ actions:
   - id: clifford rb
     priority: 0
     operation: clifford_filtered_rb
+    qubits: [1, 2]
     parameters:
-      depths:
-        start: 1
-        stop: 10
-        step: 2
-      niter: 2
-      nshots: 50
-      uncertainties: None
-      n_bootstrap: 0
-
-  - id: clifford rb bootstrap
-    priority: 0
-    operation: clifford_filtered_rb
-    qubits: [1]
-    parameters:
-      depths: [0, 1, 2, 3, 5]
+      depths: [0, 1, 2, 3, 4]
       niter: 5
       nshots: 50
+      uncertainties: 0.95
       n_bootstrap: 10
-      noise_model: UnitaryErrorOnAll
+      noise_model: PauliErrorOnX
 
   - id: xid rb
     priority: 0
     operation: xid_rb
-    qubits: [0,1]
+    qubits: [2]
     parameters:
       depths:
         start: 1
@@ -331,4 +306,5 @@ actions:
       niter: 2
       nshots: 50
       uncertainties: None
-      n_bootstrap: 0
+      n_bootstrap: 10
+      noise_model: UnitaryErrorOnX
