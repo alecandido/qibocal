@@ -152,17 +152,17 @@ def _acquisition(
     for circuit in scan:
         # The inverse and measurement gate don't count for the depth.
         depth = (circuit.depth - 1) if circuit.depth > 0 else 0
+        data_list.append(
+            {
+                "depth": depth,
+                "count_x": len(circuit.gates_of_type("x")),
+            }
+        )
         if noise_model is not None:
             circuit = noise_model.apply(circuit)
         samples = circuit.execute(nshots=params.nshots).samples()
         # Every executed circuit gets a row where the data is stored.
-        data_list.append(
-            {
-                "depth": depth,
-                "samples": samples,
-                "count_x": len(circuit.gates_of_type("x")),
-            }
-        )
+        data_list[-1]["samples"] = samples
     # Build the data object which will be returned and later saved.
     data = pd.DataFrame(data_list)
 
@@ -251,14 +251,14 @@ def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], st
         Tuple[List[go.Figure], str]:
     """
 
+    meta_data = deepcopy(data.attrs)
     popt, perr = result.fit_parameters, result.fit_uncertainties
     nparams = len(popt) // 2
-    label = r"Fit: y=\sum_i A_i p_i^x<br>" + "<br>".join(
-        [
-            f"A_{k+1}: {number_to_str(popt[k], perr[k])}<br>p_{k+1}: {number_to_str(popt[nparams+k], perr[nparams+k])}"
-            for k in range(nparams)
-        ]
-    )
+    label = r"Fit: y=\sum_i A_i p_i^x"
+    for k in range(nparams):
+        meta_data[f"A_{k+1}"] = number_to_str(popt[k], perr[k])
+        meta_data[f"p_{k+1}"] = number_to_str(popt[nparams + k], perr[nparams + k])
+
     # Create RB figure with legend on top
     fig = rb_figure(
         data,
@@ -268,7 +268,6 @@ def _plot(data: RBData, result: XIdRBResult, qubit) -> Tuple[List[go.Figure], st
         legend=dict(yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
-    meta_data = deepcopy(data.attrs)
     meta_data.pop("depths")
     if not meta_data["noise_model"]:
         meta_data.pop("noise_model")
