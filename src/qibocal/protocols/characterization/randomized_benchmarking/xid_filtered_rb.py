@@ -34,16 +34,16 @@ class XIdRBParameters(StandardRBParameters):
 class XIdRBResult(Results):
     """XId RB outputs."""
 
-    fit_parameters: tuple[float, float, float]
+    fit_parameters: tuple[float]
     """Fitting parameters."""
-    fit_uncertainties: tuple[float, float, float]
+    fit_uncertainties: tuple[float]
     """Fitting parameters uncertainties."""
     error_bars: Optional[Union[float, list[float], np.ndarray]] = None
     """Error bars for y."""
 
 
 def setup_scan(
-    params: StandardRBParameters,
+    params: XIdRBParameters,
     qubits: Union[Qubits, list[QubitId]],
     **kwargs,
 ) -> Iterable:
