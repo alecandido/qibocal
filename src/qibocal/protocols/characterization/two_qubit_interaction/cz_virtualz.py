@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from qibolab import AcquisitionType, AveragingMode, ExecutionParameters
 from qibolab.platform import Platform
-from qibolab.pulses import Pulse, PulseSequence
+from qibolab.pulses import Pulse, PulseSequence, FluxPulse, Exponential
 from qibolab.qubits import QubitId
 from qibolab.sweeper import Parameter, Sweeper, SweeperType
 from scipy.optimize import curve_fit
@@ -105,26 +105,42 @@ def create_sequence(
 
     sequence = PulseSequence()
 
+    
+
     Y90_pulse = platform.create_RX90_pulse(
-        target_qubit, start=0, relative_phase=np.pi / 2
+        target_qubit, start=40, relative_phase=np.pi / 2
     )
-    RX_pulse_start = platform.create_RX_pulse(control_qubit, start=0, relative_phase=0)
+    RX_pulse_start = platform.create_RX_pulse(control_qubit, start=40, relative_phase=0)
 
     flux_sequence, virtual_z_phase = platform.create_CZ_pulse_sequence(
         (highfreq, lowfreq),
         start=max(Y90_pulse.finish, RX_pulse_start.finish),
     )
 
+    #virtual_z_phase = {1: 0.04, 2: 4.18} 
+    #virtual_z_phase = {2: 0.14, 3: 2.48}
+
     theta_pulse = platform.create_RX90_pulse(
         target_qubit,
         start=flux_sequence.finish + dt,
         relative_phase=virtual_z_phase[target_qubit],
     )
+
     RX_pulse_end = platform.create_RX_pulse(
         control_qubit,
         start=flux_sequence.finish + dt,
         relative_phase=virtual_z_phase[control_qubit],
     )
+
+    if 1 in ord_pair:
+        parking_pulse = FluxPulse(start=0, 
+                                    duration=theta_pulse.finish, 
+                                    amplitude=-platform.qubits[0].sweetspot, 
+                                    shape=Exponential(12, 5000, 0.1), 
+                                    channel=platform.qubits[0].flux.name, 
+                                    qubit=0)
+        sequence.add(parking_pulse)
+
     measure_target = platform.create_qubit_readout_pulse(
         target_qubit, start=theta_pulse.finish
     )
@@ -194,9 +210,6 @@ def _acquisition(
             (ord_pair[1], ord_pair[0]),
         ):
             for setup in ("I", "X"):
-                theta = np.arange(
-                    params.theta_start, params.theta_end, params.theta_step, dtype=float
-                )
 
                 (
                     sequence,
@@ -212,7 +225,15 @@ def _acquisition(
                     params.parking,
                 )
                 data.vphases[ord_pair] = dict(virtual_z_phase)
-                theta += virtual_z_phase[target_q]
+                #thetas = virtual_z_phase[target_q]+theta
+                #virtual_z_phase = {2: -0.14, 3: 2.35}
+                #virtual_z_phase = {1: 0.06, 2: 4.30}
+                theta = np.arange(
+                    virtual_z_phase[target_q]+params.theta_start, 
+                    virtual_z_phase[target_q]+params.theta_end, 
+                    params.theta_step, dtype=float
+                )
+                print(theta)
                 sweeper = Sweeper(
                     Parameter.relative_phase,
                     theta,

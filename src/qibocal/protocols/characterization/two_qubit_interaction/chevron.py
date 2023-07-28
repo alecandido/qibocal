@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from qibolab import AcquisitionType, AveragingMode, ExecutionParameters
 from qibolab.platform import Platform
-from qibolab.pulses import PulseSequence
+from qibolab.pulses import PulseSequence, FluxPulse, Exponential
 from qibolab.qubits import Qubit, QubitId
 from qibolab.sweeper import Parameter, Sweeper, SweeperType
 from scipy.optimize import curve_fit
@@ -120,6 +120,15 @@ def _aquisition(
         initialize_highfreq = platform.create_RX_pulse(
             ordered_pair[1], start=0, relative_phase=0
         )
+
+        if 1 in ordered_pair:
+            parking_pulse = FluxPulse(start=0, 
+                                      duration=initialize_highfreq.finish + params.duration_max + params.dt, 
+                                      amplitude=-platform.qubits[0].sweetspot, 
+                                      shape=Exponential(12, 5000, 0.1), 
+                                      channel=platform.qubits[0].flux.name, 
+                                      qubit=0)
+            sequence.add(parking_pulse)
 
         sequence.add(initialize_highfreq)
         sequence.add(initialize_lowfreq)
