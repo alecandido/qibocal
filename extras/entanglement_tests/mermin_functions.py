@@ -51,13 +51,13 @@ class MerminExperiment:
             virtual_z_phases[qubit] += cz_virtual_z_phases[qubit]
 
         (cz_sequence2, cz_virtual_z_phases) = platform.create_CZ_pulse_sequence(
-            qubits[1:3], sequence.finish
+            qubits[1:3], sequence.finish+16
         )
         sequence.add(cz_sequence2)
         for qubit in cz_virtual_z_phases:
             virtual_z_phases[qubit] += cz_virtual_z_phases[qubit]
 
-        t = sequence.finish
+        t = sequence.finish+16
 
         sequence.add(
             platform.create_RX90_pulse(
@@ -110,13 +110,13 @@ class MerminExperiment:
                     )
             measurement_start = sequence.finish
 
-            parking_pulse = FluxPulse(start=0, 
-                                        duration=measurement_start, 
-                                        amplitude=-platform.qubits[0].sweetspot, 
-                                        shape=Exponential(12, 5000, 0.1), 
-                                        channel=platform.qubits[0].flux.name, 
-                                        qubit=0)
-            sequence.add(parking_pulse)
+            # parking_pulse = FluxPulse(start=0, 
+            #                             duration=measurement_start, 
+            #                             amplitude=-platform.qubits[0].sweetspot, 
+            #                             shape=Exponential(12, 5000, 0.1), 
+            #                             channel=platform.qubits[0].flux.name, 
+            #                             qubit=0)
+            # sequence.add(parking_pulse)
             
             for qubit in qubits:
                 MZ_pulse = platform.create_MZ_pulse(qubit, start=measurement_start)

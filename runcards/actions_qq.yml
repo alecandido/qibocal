@@ -223,11 +223,11 @@ actions:
 #       nshots: 1024
 
 
-  - id: single shot classification
-    priority: 0
-    operation: single_shot_classification
-    parameters:
-      nshots: 1000
+  # - id: single shot classification
+  #   priority: 0
+  #   operation: single_shot_classification
+  #   parameters:
+  #     nshots: 1000
 
 
   # - id: allXY

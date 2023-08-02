@@ -133,15 +133,6 @@ def create_sequence(
         relative_phase=virtual_z_phase[control_qubit],
     )
 
-    if 1 in ord_pair:
-        parking_pulse = FluxPulse(start=0, 
-                                    duration=theta_pulse.finish, 
-                                    amplitude=-platform.qubits[0].sweetspot, 
-                                    shape=Exponential(12, 5000, 0.1), 
-                                    channel=platform.qubits[0].flux.name, 
-                                    qubit=0)
-        sequence.add(parking_pulse)
-
     measure_target = platform.create_qubit_readout_pulse(
         target_qubit, start=theta_pulse.finish
     )
