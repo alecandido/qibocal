@@ -1,11 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
+import numpy.typing as npt
 import plotly.graph_objects as go
 from qibolab import AcquisitionType, AveragingMode, ExecutionParameters
 from qibolab.platform import Platform
 from qibolab.pulses import PulseSequence
 from qibolab.qubits import QubitId
+
 
 from qibocal import update
 from qibocal.auto.operation import Data, Parameters, Qubits, Results, Routine
@@ -26,15 +28,17 @@ class ZZCrossTalkMatrixParameters(Parameters):
 
 @dataclass
 class ZZCrossTalkMatrixResults(Results):
-    """SpinEcho outputs."""
+    """ZZCrossTalkMatrix  outputs."""
 
-    fitted_parameters: dict[QubitId, dict[str, float]]
-    """Raw fitting output."""
-
+ZZMatrixType = np.dtype(
+    [("wait", np.float64), ("prob", np.float64)]
+)
 
 class ZZCrossTalkMatrixData(Data):
     """ZZCrossTalkMatrix acquisition outputs."""
 
+    data: dict[QubitId, QubitId, npt.NDArray] = field(default_factory=dict)
+    """Raw data acquired."""
 
 def _acquisition(
     params: ZZCrossTalkMatrixParameters,
@@ -43,8 +47,10 @@ def _acquisition(
 ) -> ZZCrossTalkMatrixData:
     """Data acquisition for ZZCrossTalkMatrix"""
     
+    # Reference Arxiv: https://arxiv.org/pdf/2012.03895.pdf 
+    # (supplemental material (page 15): VII. MEASUREMENT MODELS, COST FUNCTION EVALUATION, AND TWO-QUBIT STATE TOMOGRAPHY )
+
     # create a sequence of pulses for the experiment:
-    
     # Echo qubit:    Rx pi/2 - wait t - Rx pi - wait t - Rx pi/2 - RO
     #                ----------------           -----------------
     #                      tau                         tau
@@ -106,8 +112,8 @@ def _acquisition(
             
             # add results for the given pair of echo and control qubit
             data.register_qubit(
-                echo_qubit,
-                control_qubit,
+                ZZMatrixType,
+                (echo_qubit, control_qubit),
                 dict(wait=wait_range, prob=probs[echo_qubit]),
             )
     return data
