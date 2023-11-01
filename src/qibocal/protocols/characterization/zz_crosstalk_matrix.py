@@ -70,19 +70,19 @@ def _acquisition(
     for echo_qubit in qubits:
         for control_qubit in qubits:
             # create echo qubit pulses
-            echo_RX45_pulse1 = platform.create_RX90_pulse(echo_qubit, start=0)
-            echo_RX_pulse = platform.create_RX_pulse(echo_qubit, start=echo_RX45_pulse1.finish)
-            echo_RX45_pulse2 = platform.create_RX90_pulse(echo_qubit, start=echo_RX_pulse.finish)
-            echo_RO_pulse = platform.create_qubit_readout_pulse(echo_qubit, start=echo_RX45_pulse2.finish)
+            echo_RX90_pulse1 = platform.create_RX90_pulse(echo_qubit, start=0)
+            echo_RX_pulse = platform.create_RX_pulse(echo_qubit, start=echo_RX90_pulse1.finish)
+            echo_RX90_pulse2 = platform.create_RX90_pulse(echo_qubit, start=echo_RX_pulse.finish)
+            echo_RO_pulse = platform.create_qubit_readout_pulse(echo_qubit, start=echo_RX90_pulse2.finish)
 
             # create control qubit pulses
             control_RX_pulse =  platform.create_RX_pulse(control_qubit, start=echo_RX_pulse.start)
             control_RO_pulse = platform.create_qubit_readout_pulse(control_qubit, start=echo_RX_pulse.start)
 
             # add echo and control pulses to the sequence
-            sequence.add(echo_RX45_pulse1)
+            sequence.add(echo_RX90_pulse1)
             sequence.add(echo_RX_pulse)
-            sequence.add(echo_RX45_pulse2)
+            sequence.add(echo_RX90_pulse2)
             sequence.add(echo_RO_pulse) 
 
             sequence.add(control_RX_pulse)
@@ -91,9 +91,9 @@ def _acquisition(
             probs = {}
             # sweep the wait time parameter
             for wait in wait_range:
-                echo_RX_pulse.start = echo_RX45_pulse1.finish + wait
-                echo_RX45_pulse2.start = echo_RX_pulse.finish + wait
-                echo_RO_pulse.start = echo_RX45_pulse2.finish
+                echo_RX_pulse.start = echo_RX90_pulse1.finish + wait
+                echo_RX90_pulse2.start = echo_RX_pulse.finish + wait
+                echo_RO_pulse.start = echo_RX90_pulse2.finish
                 
                 control_RX_pulse.start = echo_RX_pulse.start
                 control_RO_pulse = echo_RX_pulse.start
