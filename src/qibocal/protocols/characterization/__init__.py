@@ -47,6 +47,7 @@ from .resonator_spectroscopy import resonator_spectroscopy
 from .resonator_spectroscopy_attenuation import resonator_spectroscopy_attenuation
 from .signal_experiments.time_of_flight_readout import time_of_flight_readout
 from .two_qubit_interaction import chevron, chsh_circuits, chsh_pulses, cz_virtualz
+from .zz_crosstalk_matrix import zz_crosstalk_matrix
 
 
 class Operation(Enum):
@@ -99,3 +100,4 @@ class Operation(Enum):
     qubit_spectroscopy_ef = qubit_spectroscopy_ef
     qutrit_classification = qutrit_classification
     resonator_amplitude = resonator_amplitude
+    zz_crosstalk_matrix = zz_crosstalk_matrix
