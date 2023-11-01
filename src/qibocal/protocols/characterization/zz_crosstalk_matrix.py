@@ -94,6 +94,9 @@ def _acquisition(
                 echo_RX_pulse.start = echo_RX45_pulse1.finish + wait
                 echo_RX45_pulse2.start = echo_RX_pulse.finish + wait
                 echo_RO_pulse.start = echo_RX45_pulse2.finish
+                
+                control_RX_pulse.start = echo_RX_pulse.start
+                control_RO_pulse = echo_RX_pulse.start
 
                 # execute the pulse sequence
                 results = platform.execute_pulse_sequence(
