@@ -31,13 +31,14 @@ class ZZCrossTalkMatrixResults(Results):
     """ZZCrossTalkMatrix  outputs."""
 
 ZZMatrixType = np.dtype(
-    [("wait", np.float64), ("prob", np.float64)]
+    [("wait", np.float64), ("MSR", np.float64)]
 )
 
 class ZZCrossTalkMatrixData(Data):
     """ZZCrossTalkMatrix acquisition outputs."""
 
-    data: dict[QubitId, QubitId, npt.NDArray] = field(default_factory=dict)
+    data: dict[QubitId, dict[QubitId, npt.NDArray[ZZMatrixType]]] = field(default_factory=dict)
+    #data: dict[QubitId, QubitId, npt.NDArray] = field(default_factory=dict)
     """Raw data acquired."""
 
 def _acquisition(
@@ -88,7 +89,8 @@ def _acquisition(
             sequence.add(control_RX_pulse)
             sequence.add(control_RO_pulse)           
             
-            probs = {}
+            #probs = {}
+            msrs = []
             # sweep the wait time parameter
             for wait in wait_range:
                 echo_RX_pulse.start = echo_RX90_pulse1.finish + wait
@@ -104,20 +106,28 @@ def _acquisition(
                     ExecutionParameters(
                         nshots=params.nshots,
                         relaxation_time=params.relaxation_time,
-                        acquisition_type=AcquisitionType.DISCRIMINATION,
-                        averaging_mode=AveragingMode.SINGLESHOT,
+                        acquisition_type=AcquisitionType.INTEGRATION,
+                        averaging_mode=AveragingMode.CYCLIC,
+                        #acquisition_type=AcquisitionType.DISCRIMINATION,
+                        #averaging_mode=AveragingMode.SINGLESHOT,
                     ),
                 )
                 # get probabilities of being in state 1 after executing the sequence
-                prob = results[echo_RO_pulse.serial].probability(state=1)
+                # prob = results[echo_RO_pulse.serial].probability(1)
+                result = results[echo_RO_pulse.serial]
                 # append probabilities for the echo_qubit for each wait time execution
-                probs[echo_qubit].append(prob)
+                #probs[echo_qubit].append(prob)
+                print(result.magnitude)
+                msrs.append(result.magnitude)
             
             # add results for the given pair of echo and control qubit
             data.register_qubit(
                 ZZMatrixType,
                 (echo_qubit, control_qubit),
-                dict(wait=wait_range, prob=probs[echo_qubit]),
+                dict(
+                    wait=wait_range, 
+                    MSR=msrs
+                ),
             )
     return data
 
