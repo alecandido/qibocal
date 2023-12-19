@@ -107,9 +107,13 @@ def _acquisition(
         type=SweeperType.OFFSET,
     )
 
+    # delta_bias_range = np.arange(
+    #     -params.bias_width / 2, params.bias_width / 2, params.bias_step
+    # )
     delta_bias_range = np.arange(
-        -params.bias_width / 2, params.bias_width / 2, params.bias_step
+        params.bias_min, params.bias_max, params.bias_step
     )
+    
     # TODO : abstract common lines with qubit flux dep routine
     if params.flux_qubits is None:
         flux_qubits = list(platform.qubits.keys())

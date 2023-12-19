@@ -167,7 +167,7 @@ def _acquisition(
                     qubits[qubit].flux_to_bias,
                     qubits[qubit].asymmetry,
                     qubits[qubit].g,
-                    qubits[qubit].brf,
+                    qubits[qubit].bare_resonator_frequency_sweetspot,
                     qubits[qubit].ssf_brf,
                     qubits[qubit].Ec,
                     qubits[qubit].Ej,

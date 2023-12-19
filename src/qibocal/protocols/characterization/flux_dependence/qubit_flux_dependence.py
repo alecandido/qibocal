@@ -30,8 +30,12 @@ class QubitFluxParameters(Parameters):
     """Width for frequency sweep relative to the qubit frequency [Hz]."""
     freq_step: int
     """Frequency step for sweep [Hz]."""
-    bias_width: float
+    bias_min: float
     """Width for bias sweep [V]."""
+    bias_max: float
+    """Bias step for sweep [a.u.]."""
+    # bias_width: float
+    # """Width for bias sweep [V]."""
     bias_step: float
     """Bias step for sweep [a.u.]."""
     drive_amplitude: Optional[float] = None
@@ -139,8 +143,11 @@ def _acquisition(
         type=SweeperType.OFFSET,
     )
 
+    # delta_bias_range = np.arange(
+    #     -params.bias_width / 2, params.bias_width / 2, params.bias_step
+    # )
     delta_bias_range = np.arange(
-        -params.bias_width / 2, params.bias_width / 2, params.bias_step
+        params.bias_min, params.bias_max, params.bias_step
     )
     bias_sweepers = [
         Sweeper(
