@@ -55,6 +55,7 @@ def _aquisition(
         params.amplitude_max,
         params.amplitude_step,
     )
+    
     delta_duration_range = np.arange(
         params.duration_min, params.duration_max, params.duration_step
     )
@@ -70,68 +71,68 @@ def _aquisition(
         sequence = PulseSequence()
 
         ordered_pair = order_pair(pair, platform.qubits)
-
-        # initialize in system in 11(CZ) or 10(iSWAP) state
-        # if params.native_gate == "CZ":
-        #     initialize_lowfreq = platform.create_RX_pulse(ordered_pair[0], start=0)
-        #     sequence.add(initialize_lowfreq)
-        
-        # if params.native_gate == "CZ":
-        #     native_gate, _ = platform.create_CZ_pulse_sequence(
-        #         (ordered_pair[1], ordered_pair[0]),
-        #         start=sequence.finish + params.dt,
-        #     )
-            
-        # elif params.native_gate == "iSWAP":
-        #     native_gate, _ = platform.create_iSWAP_pulse_sequence(
-        #         (ordered_pair[1], ordered_pair[0]),
-        #         start=sequence.finish + params.dt,
-        #     )
+        q_lf = ordered_pair[0] # low frequency qubit
+        q_hf = ordered_pair[1] # high frequency qubit
 
         # q_hf already biased to interaction point with q_lf during platform setup (runcard sweetspot set to interaction point)
+        # No need to appply any flux
 
-        # q_hf Rx
-        RX_q_hf = platform.create_RX_pulse(ordered_pair[1], start=0)
-        sequence.add(RX_q_hf)
+        # Rx pulse applied to the low freq qubit to avoid recalibrate the Rx pulse at the operational point for q_hf
+        RX_q_lf = platform.create_RX_pulse(q_lf, start=0)
+        sequence.add(RX_q_lf)
 
-        # Couple (q_lf - q_hf) Flux pulse 
-        flux_coupler_q_hf = platform.create_coupler_pulse(ordered_pair[0], start=sequence.finish)
-        sequence.add(flux_coupler_q_hf)
+        # Coupler Flux pulse applied to the coupler between qubits: q_lf, q_hf
+        flux_coupler_pulse = platform.create_coupler_pulse(q_lf, start=sequence.finish)
+        sequence.add(flux_coupler_pulse)
 
         # RO pulses for q_hf, q_lf
-        ro_pulse1 = platform.create_MZ_pulse(
-            ordered_pair[1], start=sequence.finish + params.dt
+        ro_pulse_q_hf = platform.create_MZ_pulse(
+            q_hf, start=sequence.finish + params.dt
         )
-        ro_pulse2 = platform.create_MZ_pulse(
-            ordered_pair[0], start=sequence.finish + params.dt
+        ro_pulse_q_lf = platform.create_MZ_pulse(
+            q_lf, start=sequence.finish + params.dt
         )
 
-        sequence += ro_pulse1 + ro_pulse2
+        sequence.add(ro_pulse_q_lf)
+        sequence.add(ro_pulse_q_hf)
 
-        # sweep the amplitude of the flux pulse sent to the coupler 
-        sweeper_amplitude = Sweeper(
-            Parameter.amplitude,
-            delta_amplitude_range,
-            pulses=flux_coupler_q_hf,
-        )
-        
-        # sweep the duration of the flux pulse sent to the coupler 
-        sweeper_duration = Sweeper(
-            Parameter.duration,
-            delta_duration_range,
-            pulses=flux_coupler_q_hf,
-        )
+
+        sequence.plot("./chevron.png")
+        print(sequence)
+
+        # # sweep the amplitude of the flux pulse sent to the coupler 
+        # sweeper_amplitude = Sweeper(
+        #     Parameter.amplitude,
+        #     delta_amplitude_range,
+        #     pulses=[flux_coupler_pulse],
+        # )
+
+        # # sweep the duration of the flux pulse sent to the coupler 
+        # sweeper_duration = Sweeper(
+        #     Parameter.duration,
+        #     delta_duration_range,
+        #     pulses=[flux_coupler_pulse],
+        # )
 
         # repeat the experiment as many times as defined by nshots
-        results = platform.sweep(
+        # results = platform.sweep(
+        #     sequence,
+        #     ExecutionParameters(
+        #         nshots=params.nshots,
+        #         acquisition_type=AcquisitionType.INTEGRATION,
+        #         averaging_mode=AveragingMode.CYCLIC,
+        #     ),
+        #     sweeper_duration,
+        #     sweeper_amplitude,
+        # )
+
+        results = platform.execute_pulse_sequence(
             sequence,
             ExecutionParameters(
                 nshots=params.nshots,
                 acquisition_type=AcquisitionType.INTEGRATION,
                 averaging_mode=AveragingMode.CYCLIC,
             ),
-            sweeper_duration,
-            sweeper_amplitude,
         )
 
         # TODO: Explore probabilities instead of magnitude
@@ -162,4 +163,4 @@ def plot(data: ChevronCouplersData, fit: ChevronCouplersResults, qubit):
 
 
 coupler_chevron = Routine(_aquisition, _fit, plot, two_qubit_gates=True)
-"""Coupler cz/swap flux routine."""
+"""Coupler iSwap flux routine."""

@@ -4,6 +4,7 @@ from .allxy.allxy import allxy
 from .allxy.allxy_drag_pulse_tuning import allxy_drag_pulse_tuning
 from .allxy.drag_pulse_tuning import drag_pulse_tuning
 from .classification import single_shot_classification
+from .test_state_1_flux import test_single_shot_classification
 from .coherence.spin_echo import spin_echo
 from .coherence.spin_echo_sequence import spin_echo_sequence
 from .coherence.t1 import t1
@@ -82,6 +83,7 @@ class Operation(Enum):
     t2_sequences = t2_sequences
     time_of_flight_readout = time_of_flight_readout
     single_shot_classification = single_shot_classification
+    test_single_shot_classification = test_single_shot_classification
     spin_echo = spin_echo
     spin_echo_sequence = spin_echo_sequence
     allxy = allxy
