@@ -187,6 +187,7 @@ def _acquisition(
         state1_sequence.add(RX_pulses[qubit])
         
         # Coupler Flux pulse applied to the coupler
+        print(type(qubit))
         flux_coupler_pulse = platform.create_coupler_pulse(qubit, start=state1_sequence.finish)
         state1_sequence.add(flux_coupler_pulse)
 
@@ -228,6 +229,10 @@ def _acquisition(
             acquisition_type=AcquisitionType.INTEGRATION,
         ),
     )
+
+    state1_sequence.plot("./state1_sequence.png")
+    print(state1_sequence)
+    
     # retrieve and store the results for every qubit
     for qubit in qubits:
         result = state1_results[ro_pulses[qubit].serial]

@@ -66,10 +66,11 @@ def _aquisition(
 
     # create a DataUnits object to store the results,
     data = ChevronData()
-    # sort high and low frequency qubit
-    for pair in qubits:
-        sequence = PulseSequence()
+    sequence = PulseSequence()
 
+    for pair in qubits:
+        print(pair)
+        # sort high and low frequency qubit
         ordered_pair = order_pair(pair, platform.qubits)
         q_lf = ordered_pair[0] # low frequency qubit
         q_hf = ordered_pair[1] # high frequency qubit
@@ -82,6 +83,7 @@ def _aquisition(
         sequence.add(RX_q_lf)
 
         # Coupler Flux pulse applied to the coupler between qubits: q_lf, q_hf
+        print(type(q_lf))
         flux_coupler_pulse = platform.create_coupler_pulse(q_lf, start=sequence.finish)
         sequence.add(flux_coupler_pulse)
 
@@ -137,12 +139,12 @@ def _aquisition(
 
         # TODO: Explore probabilities instead of magnitude
         data.register_qubit(
-            ordered_pair[0],
-            ordered_pair[1],
+            q_lf,
+            q_hf,
             delta_duration_range,
             delta_amplitude_range,
-            results[ordered_pair[0]].magnitude,
-            results[ordered_pair[1]].magnitude,
+            results[q_lf].magnitude,
+            results[q_hf].magnitude,
         )
 
     return data
