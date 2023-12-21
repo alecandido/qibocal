@@ -29,7 +29,7 @@ def _aquisition(
     params: ChevronCouplersParameters,
     platform: Platform,
     qubits: Qubits,
-) -> ChevronData:
+) -> ChevronCouplersData:
     r"""
     Routine to find the optimal coupler flux pulse amplitude and duration for a CZ/iSWAP gate.
 
@@ -65,11 +65,9 @@ def _aquisition(
     #   https://arxiv.org/pdf/1912.10721.pdf (pag. 2, fig a)    
 
     # create a DataUnits object to store the results,
-    data = ChevronData()
-    sequence = PulseSequence()
-
+    data = ChevronCouplersData()
     for pair in qubits:
-        print(pair)
+        sequence = PulseSequence()
         # sort high and low frequency qubit
         ordered_pair = order_pair(pair, platform.qubits)
         q_lf = ordered_pair[0] # low frequency qubit
@@ -98,45 +96,32 @@ def _aquisition(
         sequence.add(ro_pulse_q_lf)
         sequence.add(ro_pulse_q_hf)
 
+        # sweep the amplitude of the flux pulse sent to the coupler 
+        sweeper_amplitude = Sweeper(
+            Parameter.amplitude,
+            delta_amplitude_range,
+            pulses=[flux_coupler_pulse],
+        )
 
-        sequence.plot("./chevron.png")
-        print(sequence)
-
-        # # sweep the amplitude of the flux pulse sent to the coupler 
-        # sweeper_amplitude = Sweeper(
-        #     Parameter.amplitude,
-        #     delta_amplitude_range,
-        #     pulses=[flux_coupler_pulse],
-        # )
-
-        # # sweep the duration of the flux pulse sent to the coupler 
-        # sweeper_duration = Sweeper(
-        #     Parameter.duration,
-        #     delta_duration_range,
-        #     pulses=[flux_coupler_pulse],
-        # )
+        # sweep the duration of the flux pulse sent to the coupler 
+        sweeper_duration = Sweeper(
+            Parameter.duration,
+            delta_duration_range,
+            pulses=[flux_coupler_pulse],
+        )
 
         # repeat the experiment as many times as defined by nshots
-        # results = platform.sweep(
-        #     sequence,
-        #     ExecutionParameters(
-        #         nshots=params.nshots,
-        #         acquisition_type=AcquisitionType.INTEGRATION,
-        #         averaging_mode=AveragingMode.CYCLIC,
-        #     ),
-        #     sweeper_duration,
-        #     sweeper_amplitude,
-        # )
-
-        results = platform.execute_pulse_sequence(
+        results = platform.sweep(
             sequence,
             ExecutionParameters(
                 nshots=params.nshots,
                 acquisition_type=AcquisitionType.INTEGRATION,
                 averaging_mode=AveragingMode.CYCLIC,
             ),
+            sweeper_duration,
+            sweeper_amplitude,
         )
-
+        
         # TODO: Explore probabilities instead of magnitude
         data.register_qubit(
             q_lf,
