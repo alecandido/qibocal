@@ -494,3 +494,19 @@ actions:
 #     parameters:
 #       nshots: 100
 #       pulses: False
+
+
+  # - id: coupler chevron
+  #   priority: 0
+  #   operation: coupler_chevron
+  #   qubits: [[3, 2]]
+  #   parameters:
+  #     amplitude_max:  0.65
+  #     amplitude_min:  0.45
+  #     amplitude_step: 0.002
+  #     duration_max: 100
+  #     duration_min: 40
+  #     duration_step: 2
+  #     dt: 5
+  #     nshots: 1_000
+  #     relaxation_time: 100_000
