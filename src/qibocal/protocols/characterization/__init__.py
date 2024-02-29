@@ -6,7 +6,7 @@ from .allxy.drag_pulse_tuning import drag_pulse_tuning
 from .classification import single_shot_classification
 from .coherence.spin_echo import spin_echo
 from .coherence.spin_echo_signal import spin_echo_signal
-from .coherence.spin_echo_sweeper import spin_echo_signal_sweeper
+from .coherence.spin_echo_signal_sweeper import spin_echo_signal_sweeper
 from .coherence.t1 import t1
 from .coherence.t1_sequences import t1_sequences
 from .coherence.t1_signal import t1_signal

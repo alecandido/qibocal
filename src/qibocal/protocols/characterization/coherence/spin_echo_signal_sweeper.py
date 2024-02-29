@@ -1,35 +1,22 @@
 from copy import deepcopy
-from dataclasses import dataclass
 
 import numpy as np
-import plotly.graph_objects as go
 from qibolab import AcquisitionType, AveragingMode, ExecutionParameters
 from qibolab.platform import Platform
 from qibolab.pulses import PulseSequence
 from qibolab.qubits import QubitId
 from qibolab.sweeper import Parameter, Sweeper, SweeperType
 
-from qibocal import update
 from qibocal.auto.operation import Routine
 
-from ..utils import table_dict, table_html
-from . import spin_echo
-from .t1_signal import CoherenceType, T1SignalData
-from .utils import exp_decay, exponential_fit
-
-
-@dataclass
-class SpinEchoSignalParameters(spin_echo.SpinEchoParameters):
-    """SpinEcho Signal runcard inputs."""
-
-
-@dataclass
-class SpinEchoSignalResults(spin_echo.SpinEchoResults):
-    """SpinEchoSignal outputs."""
-
-
-class SpinEchoSignalData(T1SignalData):
-    """SpinEcho acquisition outputs."""
+from .spin_echo_signal import (
+    SpinEchoSignalData,
+    SpinEchoSignalParameters,
+    _fit,
+    _plot,
+    _update,
+)
+from .t1_signal import CoherenceType
 
 
 def _acquisition(
@@ -105,73 +92,6 @@ def _acquisition(
             ),
         )
     return data
-
-
-def _fit(data: SpinEchoSignalData) -> SpinEchoSignalResults:
-    """Post-processing for SpinEcho."""
-    t2Echos, fitted_parameters = exponential_fit(data)
-
-    return SpinEchoSignalResults(t2Echos, fitted_parameters)
-
-
-def _plot(data: SpinEchoSignalData, target: QubitId, fit: SpinEchoSignalResults = None):
-    """Plotting for SpinEcho"""
-
-    figures = []
-    fig = go.Figure()
-
-    # iterate over multiple data folders
-    fitting_report = None
-
-    qubit_data = data[target]
-    waits = qubit_data.wait
-
-    fig.add_trace(
-        go.Scatter(
-            x=waits,
-            y=qubit_data.signal,
-            opacity=1,
-            name="Signal",
-            showlegend=True,
-            legendgroup="Signal",
-        ),
-    )
-
-    if fit is not None:
-        # add fitting trace
-        waitrange = np.linspace(
-            min(waits),
-            max(waits),
-            2 * len(qubit_data),
-        )
-        params = fit.fitted_parameters[target]
-
-        fig.add_trace(
-            go.Scatter(
-                x=waitrange,
-                y=exp_decay(waitrange, *params),
-                name="Fit",
-                line=go.scatter.Line(dash="dot"),
-            ),
-        )
-
-        fitting_report = table_html(
-            table_dict(target, "T2 Spin Echo [ns]", np.round(fit.t2_spin_echo[target]))
-        )
-
-    fig.update_layout(
-        showlegend=True,
-        xaxis_title="Time [ns]",
-        yaxis_title="Signal [a.u.]",
-    )
-
-    figures.append(fig)
-
-    return figures, fitting_report
-
-
-def _update(results: SpinEchoSignalResults, platform: Platform, target: QubitId):
-    update.t2_spin_echo(results.t2_spin_echo[target], platform, target)
 
 
 spin_echo_signal_sweeper = Routine(_acquisition, _fit, _plot, _update)
