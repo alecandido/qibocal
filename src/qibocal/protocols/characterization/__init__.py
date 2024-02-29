@@ -6,6 +6,7 @@ from .allxy.drag_pulse_tuning import drag_pulse_tuning
 from .classification import single_shot_classification
 from .coherence.spin_echo import spin_echo
 from .coherence.spin_echo_signal import spin_echo_signal
+from .coherence.spin_echo_sweeper import spin_echo_signal_sweeper
 from .coherence.t1 import t1
 from .coherence.t1_sequences import t1_sequences
 from .coherence.t1_signal import t1_signal
@@ -85,6 +86,7 @@ class Operation(Enum):
     single_shot_classification = single_shot_classification
     spin_echo = spin_echo
     spin_echo_signal = spin_echo_signal
+    spin_echo_signal_sweeper = spin_echo_signal_sweeper
     allxy = allxy
     allxy_drag_pulse_tuning = allxy_drag_pulse_tuning
     drag_pulse_tuning = drag_pulse_tuning
