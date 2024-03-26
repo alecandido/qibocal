@@ -106,6 +106,7 @@ def _acquisition(
             Parameter.amplitude,
             delta_amplitude_range,
             pulses=[flux_coupler_pulse],
+            type=SweeperType.ABSOLUTE,
         )
 
         # sweep the duration of the flux pulse sent to the coupler 
