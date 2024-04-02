@@ -62,11 +62,18 @@ def _acquisition(
     sequence = PulseSequence()
     ro_pulses = {}
     qd_pulses = {}
+    # flux_pulses = {}
     amplitudes = {}
     for qubit in targets:
+
+        # flux_pulses[qubit] = platform.create_qubit_flux_pulse(
+        #     qubit, start=0, duration=params.drive_duration, amplitude=-0.586
+        # )
+
         qd_pulses[qubit] = platform.create_qubit_drive_pulse(
             qubit, start=0, duration=params.drive_duration
         )
+
         if params.drive_amplitude is not None:
             qd_pulses[qubit].amplitude = params.drive_amplitude
 
@@ -75,6 +82,8 @@ def _acquisition(
         ro_pulses[qubit] = platform.create_qubit_readout_pulse(
             qubit, start=qd_pulses[qubit].finish
         )
+
+        # sequence.add(flux_pulses[qubit])
         sequence.add(qd_pulses[qubit])
         sequence.add(ro_pulses[qubit])
 

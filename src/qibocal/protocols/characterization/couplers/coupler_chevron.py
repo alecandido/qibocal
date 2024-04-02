@@ -72,23 +72,23 @@ def _acquisition(
 
         # Initialize low freq qubit
         RX_q_lf = platform.create_RX_pulse(q_lf, start=0)
-        sequence.add(RX_q_lf)
-
-        # Bring q_hf in resonance with q_lf applying flux pulse
-        	#       Flux Amplitude q2
-            # q0	    -0.88
-            # q1	    -0.73
-            # q3	    -0.82
-            # q4	    -0.61
-        
-        # TODO: Read from parameters.json the flux amplitude values to shift q_hf to interaction point with q_lf
-        flux_qubit_hf = platform.create_qubit_flux_pulse(q_hf, start=sequence.finish, duration=params.duration_min, amplitude=-0.73)
+        sequence.add(RX_q_lf)    
 
         # Coupler Flux pulse applied to the coupler between qubits: q_lf, q_hf
         flux_coupler_pulse = platform.create_coupler_pulse(q_lf, start=sequence.finish)
 
-        sequence.add(flux_qubit_hf)    
+        # Add flux pulses to the sequence
         sequence.add(flux_coupler_pulse)
+
+        # TODO: Read from parameters.json the flux amplitude values to shift q_hf to interaction point with q_lf
+        # Bring q_hf in resonance with q_lf applying flux pulse
+        	#       Flux Amplitude q2          Freq q2        
+            # q0	    -0.88
+            # q1	    -0.73
+            # q3	    -0.82
+            # q4	    -0.586              4_353_818_000
+        
+        flux_qubit_hf = platform.create_qubit_flux_pulse(q_hf, start=0, duration=5000, amplitude=-0.586)
 
         # RO pulses for q_hf, q_lf
         ro_pulse_q_hf = platform.create_MZ_pulse(
@@ -96,10 +96,12 @@ def _acquisition(
         )
         ro_pulse_q_lf = platform.create_MZ_pulse(
             q_lf, start=sequence.finish + params.dt
-        )
+        )  
 
         sequence.add(ro_pulse_q_lf)
         sequence.add(ro_pulse_q_hf)
+        sequence.add(flux_qubit_hf)  
+
 
         # sweep the amplitude of the flux pulse sent to the coupler 
         sweeper_amplitude = Sweeper(
@@ -109,11 +111,11 @@ def _acquisition(
             type=SweeperType.ABSOLUTE,
         )
 
-        # sweep the duration of the flux pulse sent to the coupler 
+        # sweep the duration of the flux pulse sent to the coupler and the to the high freq qubit
         sweeper_duration = Sweeper(
             Parameter.duration,
             delta_duration_range,
-            pulses=[flux_coupler_pulse, flux_qubit_hf],
+            pulses=[flux_coupler_pulse],
             type=SweeperType.ABSOLUTE,
         )
 
