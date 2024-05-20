@@ -84,23 +84,9 @@ def _acquisition(
         sequence.add(qd_pulses[qubit])
         sequence.add(ro_pulses[qubit])
 
-        if params.flux_amplitude is not None or params.flux_duration is not None:
-            # Define default values if parameters are None
-            flux_amplitude = (
-                params.flux_amplitude if params.flux_amplitude is not None else 0
-            )
-            flux_duration = (
-                params.flux_duration
-                if params.flux_duration is not None
-                else sequence.duration
-            )
-
-            # Create the flux pulse with the specified or default parameters
+        if params.flux_amplitude is not None:
             flux_pulses[qubit] = platform.create_qubit_flux_pulse(
-                qubit,
-                start=0,
-                duration=flux_duration,
-                amplitude=flux_amplitude,
+                qubit, start=0, duration=params.drive_duration, amplitude=params.flux_amplitude
             )
             sequence.add(flux_pulses[qubit])
 
