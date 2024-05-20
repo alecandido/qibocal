@@ -113,13 +113,16 @@ def _aquisition(
             Parameter.duration,
             delta_duration_range,
             pulses=[p for p in native_gate.coupler_pulses(*pair)],
+            type=SweeperType.ABSOLUTE,
         )
+
 
         # repeat the experiment as many times as defined by nshots
         results = platform.sweep(
             sequence,
             ExecutionParameters(
                 nshots=params.nshots,
+                relaxation_time=params.relaxation_time,
                 acquisition_type=AcquisitionType.INTEGRATION,
                 averaging_mode=AveragingMode.CYCLIC,
             ),
