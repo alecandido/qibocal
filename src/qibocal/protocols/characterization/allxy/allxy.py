@@ -8,7 +8,7 @@ from qibolab.platform import Platform
 from qibolab.pulses import PulseSequence
 from qibolab.qubits import QubitId
 
-from qibocal.auto.operation import Data, Parameters, Qubits, Results, Routine
+from qibocal.auto.operation import Data, Parameters, Results, Routine
 
 
 @dataclass
@@ -27,7 +27,7 @@ class AllXYResults(Results):
     """AllXY outputs."""
 
 
-AllXYType = np.dtype([("prob", np.float64), ("gate", "<U5")])
+AllXYType = np.dtype([("prob", np.float64), ("gate", "<U5"), ("errors", np.float64)])
 
 
 @dataclass
@@ -68,7 +68,7 @@ gatelist = [
 def _acquisition(
     params: AllXYParameters,
     platform: Platform,
-    qubits: Qubits,
+    qubits: list[QubitId],
 ) -> AllXYData:
     r"""
     Data acquisition for allXY experiment.
@@ -89,14 +89,12 @@ def _acquisition(
         all_ro_pulses.append({})
         for qubit in qubits:
             sequences[-1], all_ro_pulses[-1][qubit] = add_gate_pair_pulses_to_sequence(
-                platform, gates, qubit, sequences[-1], params.beta_param
+                platform, gates, qubit, sequences[-1], beta_param=params.beta_param
             )
 
     # execute the pulse sequence
     options = ExecutionParameters(
-        nshots=params.nshots,
-        relaxation_time=params.relaxation_time,
-        averaging_mode=AveragingMode.CYCLIC,
+        nshots=params.nshots, averaging_mode=AveragingMode.CYCLIC, relaxation_time=params.relaxation_time,
     )
     if params.unrolling:
         results = platform.execute_pulse_sequences(sequences, options)
@@ -110,11 +108,24 @@ def _acquisition(
         for qubit in qubits:
             serial = ro_pulses[qubit].serial
             if params.unrolling:
-                z_proj = 2 * results[serial][ig].probability(0) - 1
+                prob = results[serial][ig].probability(state=1)
+                # prob = results[serial][ig].probability(1)
+                z_proj = 1 - 2 * prob
             else:
-                z_proj = 2 * results[ig][serial].probability(0) - 1
+                prob = results[ig][serial].probability(state=1)
+                # z_proj = prob #2 * prob - 1                
+                # prob = results[serial][ig].probability(1)
+                z_proj = 1 - 2 * prob
+
+            errors = 2 * np.sqrt(prob * (1 - prob) / params.nshots)
             data.register_qubit(
-                AllXYType, (qubit), dict(prob=np.array([z_proj]), gate=np.array([gate]))
+                AllXYType,
+                (qubit),
+                dict(
+                    prob=np.array([z_proj]),
+                    gate=np.array([gate]),
+                    errors=np.array([errors]),
+                ),
             )
 
     # finally, save the remaining data
@@ -126,21 +137,21 @@ def add_gate_pair_pulses_to_sequence(
     gates,
     qubit,
     sequence,
+    sequence_delay=0,
+    readout_delay=0,
     beta_param=None,
 ):
     pulse_duration = platform.create_RX_pulse(qubit, start=0).duration
     # All gates have equal pulse duration
 
-    sequenceDuration = 0
-    pulse_start = 0
+    sequence_duration = sequence.get_qubit_pulses(qubit).duration + sequence_delay
+    pulse_start = sequence.get_qubit_pulses(qubit).duration + sequence_delay
 
     for gate in gates:
         if gate == "I":
-            # print("Transforming to sequence I gate")
             pass
 
         if gate == "Xp":
-            # print("Transforming to sequence Xp gate")
             if beta_param == None:
                 RX_pulse = platform.create_RX_pulse(
                     qubit,
@@ -155,7 +166,6 @@ def add_gate_pair_pulses_to_sequence(
             sequence.add(RX_pulse)
 
         if gate == "X9":
-            # print("Transforming to sequence X9 gate")
             if beta_param == None:
                 RX90_pulse = platform.create_RX90_pulse(
                     qubit,
@@ -170,7 +180,6 @@ def add_gate_pair_pulses_to_sequence(
             sequence.add(RX90_pulse)
 
         if gate == "Yp":
-            # print("Transforming to sequence Yp gate")
             if beta_param == None:
                 RY_pulse = platform.create_RX_pulse(
                     qubit,
@@ -187,7 +196,6 @@ def add_gate_pair_pulses_to_sequence(
             sequence.add(RY_pulse)
 
         if gate == "Y9":
-            # print("Transforming to sequence Y9 gate")
             if beta_param == None:
                 RY90_pulse = platform.create_RX90_pulse(
                     qubit,
@@ -203,11 +211,14 @@ def add_gate_pair_pulses_to_sequence(
                 )
             sequence.add(RY90_pulse)
 
-        sequenceDuration = sequenceDuration + pulse_duration
-        pulse_start = pulse_duration
+        sequence_duration += pulse_duration
+        pulse_start = sequence_duration
 
     # RO pulse starting just after pair of gates
-    ro_pulse = platform.create_qubit_readout_pulse(qubit, start=sequenceDuration + 4)
+    ro_pulse = platform.create_qubit_readout_pulse(
+        qubit, start=sequence_duration + readout_delay
+    )
+
     sequence.add(ro_pulse)
     return sequence, ro_pulse
 
@@ -218,7 +229,7 @@ def _fit(_data: AllXYData) -> AllXYResults:
 
 
 # allXY
-def _plot(data: AllXYData, qubit, fit: AllXYResults = None):
+def _plot(data: AllXYData, qubit: QubitId, fit: AllXYResults = None):
     """Plotting function for allXY."""
 
     figures = []
@@ -226,11 +237,19 @@ def _plot(data: AllXYData, qubit, fit: AllXYResults = None):
     fig = go.Figure()
 
     qubit_data = data[qubit]
+    error_bars = qubit_data.errors
+    probs = qubit_data.prob
+    gates = qubit_data.gate
 
     fig.add_trace(
         go.Scatter(
-            x=qubit_data.gate,
-            y=qubit_data.prob,
+            x=gates,
+            y=probs,
+            error_y=dict(
+                type="data",
+                array=error_bars,
+                visible=True,
+            ),
             mode="markers",
             text=gatelist,
             textposition="bottom center",

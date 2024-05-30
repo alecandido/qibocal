@@ -38,10 +38,12 @@ from .rabi.amplitude_signal import rabi_amplitude_signal
 from .rabi.ef import rabi_amplitude_ef
 from .rabi.length import rabi_length
 from .rabi.length_sequences import rabi_length_sequences
-from .rabi.length_signal import rabi_length_signal
+from .z.rabi.length_signal import rabi_length_signal
+from .z.rabi.length import rabi_length
+
 from .ramsey import ramsey
-from .ramsey_sequences import ramsey_sequences
-from .ramsey_signal import ramsey_signal
+# from .ramsey_sequences import ramsey_sequences
+# from .ramsey_signal import ramsey_signal
 
 # from .ramsey.ramsey import ramsey
 # from .ramsey.ramsey_signal import ramsey_signal
@@ -60,9 +62,9 @@ from .readout_optimization.twpa_calibration.power import twpa_power
 from .resonator_punchout import resonator_punchout
 from .resonator_punchout_attenuation import resonator_punchout_attenuation
 from .resonator_spectroscopy import resonator_spectroscopy
-from .resonator_spectroscopy_attenuation import (  # will be removed
-    resonator_spectroscopy_attenuation,
-)
+# from .resonator_spectroscopy_attenuation import (  # will be removed
+#     resonator_spectroscopy_attenuation,
+# )
 
 # from .signal_experiments.calibrate_state_discrimination import (
 #     calibrate_state_discrimination,
@@ -72,7 +74,7 @@ from .two_qubit_interaction import chevron, chsh_circuits, chsh_pulses, cz_virtu
 from .z.coupler_chevron import coupler_chevron
 from .z.coupler_chevron_signal import coupler_chevron_signal
 from .z.dispersive_shift import dispersive_shift
-from .z.in_progress.qm_cryoscope import cryoscope
+# from .z.in_progress.qm_cryoscope import cryoscope
 from .z.in_progress.qubit_mixer_calibration import qubit_mixer_calibration
 from .z.in_progress.qubit_spectroscopy_with_lo import qubit_spectroscopy_with_lo
 from .z.in_progress.resonator_mixer_calibration import resonator_mixer_calibration
@@ -97,9 +99,9 @@ from .z.t2_signal import t2_signal
 
 class Operation(Enum):
     resonator_spectroscopy = resonator_spectroscopy
-    resonator_spectroscopy_attenuation = (
-        resonator_spectroscopy_attenuation  # will be removed
-    )
+    # resonator_spectroscopy_attenuation = (
+        # resonator_spectroscopy_attenuation  # will be removed
+    # )
     resonator_punchout = resonator_punchout
     resonator_punchout_attenuation = resonator_punchout_attenuation
     resonator_flux = resonator_flux
@@ -115,7 +117,7 @@ class Operation(Enum):
     rabi_length_signal = rabi_length_signal
     ramsey = ramsey
     ramsey_signal = ramsey_signal
-    ramsey_sequences = ramsey_sequences  # will be removed
+    # ramsey_sequences = ramsey_sequences  # will be removed
     t1 = t1
     t1_signal = t1_signal
     t1_sequences = t1_sequences
@@ -162,7 +164,7 @@ class Operation(Enum):
 
     # compatibility with future changes future_name = current_name
     spin_echo_signal = spin_echo
-    drag_tuning = drag_pulse_tuning
+    drag_pulse_tuning = drag_pulse_tuning
     chevron_signal = chevron
     twpa_power_SNR = twpa_power
     twpa_frequency_SNR = twpa_frequency
@@ -174,4 +176,4 @@ class Operation(Enum):
     qubit_spectroscopy_with_lo = qubit_spectroscopy_with_lo
     coupler_chevron = coupler_chevron
     coupler_chevron_signal = coupler_chevron_signal
-    cryoscope = cryoscope
+    # cryoscope = cryoscope

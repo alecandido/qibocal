@@ -130,7 +130,7 @@ def _aquisition(
             Parameter.amplitude,
             delta_amplitude_range,
             pulses=[p for p in native_gate.coupler_pulses(*pair)][:1],
-            type=SweeperType.FACTOR,
+            # type=SweeperType.FACTOR,
         )
         sweeper_duration = Sweeper(
             Parameter.duration,
@@ -156,7 +156,8 @@ def _aquisition(
             ordered_pair[0],
             ordered_pair[1],
             delta_duration_range,
-            delta_amplitude_range * data.native_amplitude[ordered_pair],
+            # delta_amplitude_range * data.native_amplitude[ordered_pair],
+            delta_amplitude_range,
             results[ordered_pair[0]].probability(state=1),
             results[ordered_pair[1]].probability(state=1),
         )

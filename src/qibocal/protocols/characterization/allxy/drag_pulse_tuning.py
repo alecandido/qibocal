@@ -1,26 +1,28 @@
 from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from qibolab import AcquisitionType, AveragingMode, ExecutionParameters
 from qibolab.platform import Platform
 from qibolab.pulses import PulseSequence
 from qibolab.qubits import QubitId
 from scipy.optimize import curve_fit
+from scipy.signal import find_peaks
 
 from qibocal import update
-from qibocal.auto.operation import Data, Qubits, Results, Routine
+from qibocal.auto.operation import Data, Parameters, Results, Routine
 from qibocal.config import log
 
-from ..utils import table_dict, table_html
-from . import allxy_drag_pulse_tuning
+from ..utils import COLORBAND, COLORBAND_LINE, chi2_reduced, table_dict, table_html
+
+# TODO: add errors in fitting
 
 
 @dataclass
-class DragPulseTuningParameters(allxy_drag_pulse_tuning.AllXYDragParameters):
-    """DragPulseTuning runcard inputs."""
+class DragTuningParameters(Parameters):
+    """DragTuning runcard inputs."""
 
     beta_start: float
     """DRAG pulse beta start sweep parameter."""
@@ -28,38 +30,44 @@ class DragPulseTuningParameters(allxy_drag_pulse_tuning.AllXYDragParameters):
     """DRAG pulse beta end sweep parameter."""
     beta_step: float
     """DRAG pulse beta sweep step parameter."""
+    unrolling: bool = False
+    """If ``True`` it uses sequence unrolling to deploy multiple sequences in a single instrument call.
+    Defaults to ``False``."""
 
 
 @dataclass
-class DragPulseTuningResults(Results):
-    """DragPulseTuning outputs."""
+class DragTuningResults(Results):
+    """DragTuning outputs."""
 
     betas: dict[QubitId, float]
     """Optimal beta paramter for each qubit."""
     fitted_parameters: dict[QubitId, dict[str, float]]
     """Raw fitting output."""
+    chi2: dict[QubitId, tuple[float, Optional[float]]] = field(default_factory=dict)
+    """Chi2 calculation."""
 
 
-DragPulseTuningType = np.dtype([("signal", np.float64), ("beta", np.float64)])
+DragTuningType = np.dtype(
+    [("prob", np.float64), ("error", np.float64), ("beta", np.float64)]
+)
 
 
 @dataclass
-class DragPulseTuningData(Data):
-    """DragPulseTuning acquisition outputs."""
+class DragTuningData(Data):
+    """DragTuning acquisition outputs."""
 
-    data: dict[QubitId, npt.NDArray[DragPulseTuningType]] = field(default_factory=dict)
+    data: dict[QubitId, npt.NDArray[DragTuningType]] = field(default_factory=dict)
     """Raw data acquired."""
 
 
 def _acquisition(
-    params: DragPulseTuningParameters,
+    params: DragTuningParameters,
     platform: Platform,
-    qubits: Qubits,
-) -> DragPulseTuningData:
+    qubits: list[QubitId],
+) -> DragTuningData:
     r"""
     Data acquisition for drag pulse tuning experiment.
-    In this experiment, we apply two sequences in a given qubit: Rx(pi/2) - Ry(pi) and Ry(pi) - Rx(pi/2) for a range
-    of different beta parameter values. After fitting, we obtain the best coefficient value for a pi pulse with drag shape.
+    See https://arxiv.org/pdf/1504.06597.pdf Fig. 2 (c).
     """
     # define the parameter to sweep and its range:
     # qubit drive DRAG pulse beta parameter
@@ -67,153 +75,168 @@ def _acquisition(
         params.beta_start, params.beta_end, params.beta_step
     ).round(4)
 
-    data = DragPulseTuningData()
+    data = DragTuningData()
 
+    sequences, all_ro_pulses = [], []
     for beta_param in beta_param_range:
-        # create two sequences of pulses
-        # seq1: RX(pi/2) - RY(pi) - MZ
-        # seq1: RY(pi/2) - RX(pi) - MZ
-
+        sequence = PulseSequence()
         ro_pulses = {}
-        seq1 = PulseSequence()
-        seq2 = PulseSequence()
         for qubit in qubits:
-            # drag pulse RX(pi/2)
-            RX90_drag_pulse = platform.create_RX90_drag_pulse(
+            RX_drag_pulse = platform.create_RX_drag_pulse(
                 qubit, start=0, beta=beta_param
             )
-            # drag pulse RY(pi)
-            RY_drag_pulse = platform.create_RX_drag_pulse(
-                qubit,
-                start=RX90_drag_pulse.finish,
-                relative_phase=+np.pi / 2,
-                beta=beta_param,
+            RX_drag_pulse_minus = platform.create_RX_drag_pulse(
+                qubit, start=RX_drag_pulse.finish, beta=beta_param, relative_phase=np.pi
             )
-            # drag pulse RY(pi/2)
-            RY90_drag_pulse = platform.create_RX90_drag_pulse(
-                qubit, start=0, relative_phase=np.pi / 2, beta=beta_param
-            )
-            # drag pulse RX(pi)
-            RX_drag_pulse = platform.create_RX_drag_pulse(
-                qubit, start=RY90_drag_pulse.finish, beta=beta_param
-            )
-
-            # RO pulse
             ro_pulses[qubit] = platform.create_qubit_readout_pulse(
-                qubit,
-                start=2
-                * RX90_drag_pulse.duration,  # assumes all single-qubit gates have same duration
+                qubit, start=RX_drag_pulse_minus.finish
             )
-            # RX(pi/2) - RY(pi) - RO
-            seq1.add(RX90_drag_pulse)
-            seq1.add(RY_drag_pulse)
-            seq1.add(ro_pulses[qubit])
 
-            # RX(pi/2) - RY(pi) - RO
-            seq2.add(RY90_drag_pulse)
-            seq2.add(RX_drag_pulse)
-            seq2.add(ro_pulses[qubit])
+            sequence.add(RX_drag_pulse)
+            sequence.add(RX_drag_pulse_minus)
+            sequence.add(ro_pulses[qubit])
+        sequences.append(sequence)
+        all_ro_pulses.append(ro_pulses)
 
-        # execute the pulse sequences
-        result1 = platform.execute_pulse_sequence(
-            seq1,
-            ExecutionParameters(
-                nshots=params.nshots,
-                relaxation_time=params.relaxation_time,
-                acquisition_type=AcquisitionType.INTEGRATION,
-                averaging_mode=AveragingMode.CYCLIC,
-            ),
-        )
-        result2 = platform.execute_pulse_sequence(
-            seq2,
-            ExecutionParameters(
-                nshots=params.nshots,
-                relaxation_time=params.relaxation_time,
-                acquisition_type=AcquisitionType.INTEGRATION,
-                averaging_mode=AveragingMode.CYCLIC,
-            ),
-        )
+    options = ExecutionParameters(
+        nshots=params.nshots,
+        relaxation_time=params.relaxation_time,
+        acquisition_type=AcquisitionType.DISCRIMINATION,
+        averaging_mode=AveragingMode.SINGLESHOT,
+    )
+    # execute the pulse sequence
+    if params.unrolling:
+        results = platform.execute_pulse_sequences(sequences, options)
 
-        # retrieve the results for every qubit
+    elif not params.unrolling:
+        results = [
+            platform.execute_pulse_sequence(sequence, options) for sequence in sequences
+        ]
+
+    for ig, (beta, ro_pulses) in enumerate(zip(beta_param_range, all_ro_pulses)):
         for qubit in qubits:
-            r1 = result1[ro_pulses[qubit].serial]
-            r2 = result2[ro_pulses[qubit].serial]
+            serial = ro_pulses[qubit].serial
+            if params.unrolling:
+                result = results[serial][ig]
+            else:
+                result = results[ig][serial]
+            prob = result.probability(state=1)
+            prob = 1 - prob
             # store the results
             data.register_qubit(
-                DragPulseTuningType,
+                DragTuningType,
                 (qubit),
                 dict(
-                    signal=np.array([r1.magnitude - r2.magnitude]),
-                    beta=np.array([beta_param]),
+                    prob=np.array([prob]),
+                    error=np.array([np.sqrt(prob * (1 - prob) / params.nshots)]),
+                    beta=np.array([beta]),
                 ),
             )
 
     return data
 
 
-def drag_fit(x, p0, p1, p2, p3):
-    # Offset                  : p[0]
-    # Amplitude               : p[1]
-    # Period                  : p[2]
-    # Phase                   : p[3]
-    return p0 + p1 * np.cos(2 * np.pi * x / p2 + p3)
+def drag_fit(x, offset, amplitude, period, phase):
+    return offset + amplitude * np.cos(2 * np.pi * x / period + phase)
 
 
-def _fit(data: DragPulseTuningData) -> DragPulseTuningResults:
-    r"""
-    Fitting routine for drag tunning. The used model is
-
-        .. math::
-
-            y = p_1 cos \Big(\frac{2 \pi x}{p_2} + p_3 \Big) + p_0.
-
-    """
+def _fit(data: DragTuningData) -> DragTuningResults:
     qubits = data.qubits
     betas_optimal = {}
     fitted_parameters = {}
+    chi2 = {}
 
     for qubit in qubits:
         qubit_data = data[qubit]
-        voltages = qubit_data.signal
         beta_params = qubit_data.beta
+        prob = qubit_data.prob
+
+        beta_min = np.min(beta_params)
+        beta_max = np.max(beta_params)
+        normalized_beta = (beta_params - beta_min) / (beta_max - beta_min)
+
+        # Guessing period using fourier transform
+        ft = np.fft.rfft(prob)
+        mags = abs(ft)
+        local_maxima = find_peaks(mags, threshold=1)[0]
+        index = local_maxima[0] if len(local_maxima) > 0 else None
+        # 0.5 hardcoded guess for less than one oscillation
+        f = (
+            beta_params[index] / (beta_params[1] - beta_params[0])
+            if index is not None
+            else 0.5
+        )
+        pguess = [0.5, 0.5, 1 / f, 0]
 
         try:
-            popt, pcov = curve_fit(drag_fit, beta_params, voltages)
-            smooth_dataset = drag_fit(beta_params, popt[0], popt[1], popt[2], popt[3])
-            min_abs_index = np.abs(smooth_dataset).argmin()
-            beta_optimal = beta_params[min_abs_index]
-        except:
-            log.warning("drag_tuning_fit: the fitting was not succesful")
-            popt = np.array([0, 0, 1, 0])
-            beta_optimal = 0
+            popt, _ = curve_fit(
+                drag_fit,
+                normalized_beta,
+                prob,
+                p0=pguess,
+                maxfev=100000,
+                bounds=(
+                    [0, 0, 0, -np.pi],
+                    [1, 1, np.inf, np.pi],
+                ),
+                sigma=qubit_data.error,
+            )
+            translated_popt = [
+                popt[0],
+                popt[1],
+                popt[2] * (beta_max - beta_min),
+                popt[3] - 2 * np.pi * beta_min / popt[2] / (beta_max - beta_min),
+            ]
+            fitted_parameters[qubit] = translated_popt
+            predicted_prob = drag_fit(beta_params, *translated_popt)
+            betas_optimal[qubit] = beta_params[np.argmax(predicted_prob)]
+            chi2[qubit] = (
+                chi2_reduced(
+                    prob,
+                    predicted_prob,
+                    qubit_data.error,
+                ),
+                np.sqrt(2 / len(prob)),
+            )
+        except Exception as e:
+            log.warning(f"drag_tuning_fit failed for qubit {qubit} due to {e}.")
 
-        fitted_parameters[qubit] = popt.tolist()
-        betas_optimal[qubit] = beta_optimal
-    return DragPulseTuningResults(betas_optimal, fitted_parameters)
+    return DragTuningResults(betas_optimal, fitted_parameters, chi2=chi2)
 
 
-def _plot(data: DragPulseTuningData, qubit, fit: DragPulseTuningResults):
-    """Plotting function for DragPulseTuning."""
+def _plot(data: DragTuningData, qubit: QubitId, fit: DragTuningResults):
+    """Plotting function for DragTuning."""
 
     figures = []
     fitting_report = ""
 
-    fig = make_subplots(
-        rows=1,
-        cols=1,
-        horizontal_spacing=0.01,
-        vertical_spacing=0.01,
-    )
     qubit_data = data[qubit]
-    fig.add_trace(
-        go.Scatter(
-            x=qubit_data.beta,
-            y=qubit_data.signal,
-            mode="markers",
-            name="Probability",
-            showlegend=True,
-            legendgroup="group1",
-        ),
+    fig = go.Figure(
+        [
+            go.Scatter(
+                x=qubit_data.beta,
+                y=qubit_data.prob,
+                opacity=1,
+                mode="lines",
+                name="Probability",
+                showlegend=True,
+                legendgroup="Probability",
+            ),
+            go.Scatter(
+                x=np.concatenate((qubit_data.beta, qubit_data.beta[::-1])),
+                y=np.concatenate(
+                    (
+                        qubit_data.prob + qubit_data.error,
+                        (qubit_data.prob - qubit_data.error)[::-1],
+                    )
+                ),
+                fill="toself",
+                fillcolor=COLORBAND,
+                line=dict(color=COLORBAND_LINE),
+                showlegend=True,
+                name="Errors",
+            ),
+        ]
     )
 
     # add fitting traces
@@ -227,25 +250,24 @@ def _plot(data: DragPulseTuningData, qubit, fit: DragPulseTuningResults):
         fig.add_trace(
             go.Scatter(
                 x=beta_range,
-                y=drag_fit(
-                    beta_range,
-                    float(fit.fitted_parameters[qubit][0]),
-                    float(fit.fitted_parameters[qubit][1]),
-                    float(fit.fitted_parameters[qubit][2]),
-                    float(fit.fitted_parameters[qubit][3]),
-                ),
+                y=drag_fit(beta_range, *fit.fitted_parameters[qubit]),
                 name="Fit",
                 line=go.scatter.Line(dash="dot"),
             ),
         )
         fitting_report = table_html(
-            table_dict(qubit, "Optimal Beta Param", np.round(fit.betas[qubit], 4))
+            table_dict(
+                qubit,
+                ["Optimal Beta Param", "Chi2 reduced"],
+                [(np.round(fit.betas[qubit], 4), 0), fit.chi2[qubit]],
+                display_error=True,
+            )
         )
 
     fig.update_layout(
         showlegend=True,
         xaxis_title="Beta parameter",
-        yaxis_title="Signal [a.u.] [Rx(pi/2) - Ry(pi)] - [Ry(pi/2) - Rx(pi)]",
+        yaxis_title="Ground State Probability",
     )
 
     figures.append(fig)
@@ -253,9 +275,9 @@ def _plot(data: DragPulseTuningData, qubit, fit: DragPulseTuningResults):
     return figures, fitting_report
 
 
-def _update(results: DragPulseTuningResults, platform: Platform, qubit: QubitId):
-    update.drag_pulse_beta(results.betas[qubit], platform, qubit)
+def _update(results: DragTuningResults, platform: Platform, target: QubitId):
+    update.drag_pulse_beta(results.betas[target], platform, target)
 
 
 drag_pulse_tuning = Routine(_acquisition, _fit, _plot, _update)
-"""DragPulseTuning Routine object."""
+"""DragTuning Routine object."""

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -9,7 +9,7 @@ from qibolab.platform import Platform
 from qibolab.pulses import PulseSequence
 from qibolab.qubits import QubitId
 
-from qibocal.auto.operation import Data, Parameters, Qubits, Results, Routine
+from qibocal.auto.operation import Data, Parameters, Results, Routine
 
 from . import allxy
 
@@ -24,6 +24,9 @@ class AllXYDragParameters(Parameters):
     """Final beta parameter for Drag pulse."""
     beta_step: float
     """Step beta parameter for Drag pulse."""
+    unrolling: bool = False
+    """If ``True`` it uses sequence unrolling to deploy multiple sequences in a single instrument call.
+    Defaults to ``False``."""    
 
 
 @dataclass
@@ -37,7 +40,7 @@ class AllXYDragData(Data):
 
     beta_param: Optional[float] = None
     """Beta parameter for drag pulse."""
-    data: dict[tuple[QubitId, float], npt.NDArray[allxy.AllXYType]] = field(
+    data: Dict[Tuple[QubitId, float], npt.NDArray[allxy.AllXYType]] = field(
         default_factory=dict
     )
     """Raw data acquired."""
@@ -45,13 +48,24 @@ class AllXYDragData(Data):
     @property
     def beta_params(self):
         """Access qubits from data structure."""
-        return np.unique([b[1] for b in self.data])
+        keys = list(self.data.keys())
+        print("Contenido de las claves de self.data:", keys)
+        for key in keys:
+            print(f"Clave: {key}, tipo: {type(key)}")
+        return np.unique([key[1] for key in self.data.keys() if isinstance(key, tuple) and len(key) > 1])
+
+    def register_qubit(self, data_type, qubit, data):
+        key = (qubit, self.beta_param)
+        if key not in self.data:
+            self.data[key] = np.array([(data['prob'][0], data['gate'][0], data['errors'][0])], dtype=data_type)
+        else:
+            self.data[key] = np.append(self.data[key], np.array([(data['prob'][0], data['gate'][0], data['errors'][0])], dtype=data_type))
 
 
 def _acquisition(
     params: AllXYDragParameters,
     platform: Platform,
-    qubits: Qubits,
+    qubits: list[QubitId],
 ) -> AllXYDragData:
     r"""
     Data acquisition for allXY experiment varying beta.
@@ -68,36 +82,56 @@ def _acquisition(
 
     betas = np.arange(params.beta_start, params.beta_end, params.beta_step).round(4)
     # sweep the parameters
+    # repeat the experiment as many times as defined by software_averages
+    # for iteration in range(params.software_averages):
+    sequences, all_ro_pulses = [], []
     for beta_param in betas:
+        print(beta_param)
+        data.beta_param = beta_param  # Asigna el valor actual de beta_param a data.beta_param
         for gates in allxy.gatelist:
-            # create a sequence of pulses
-            ro_pulses = {}
-            sequence = PulseSequence()
+            sequences.append(PulseSequence())
+            all_ro_pulses.append({})
             for qubit in qubits:
-                sequence, ro_pulses[qubit] = allxy.add_gate_pair_pulses_to_sequence(
-                    platform, gates, qubit, sequence, beta_param
+                sequences[-1], all_ro_pulses[-1][qubit] = allxy.add_gate_pair_pulses_to_sequence(
+                    platform, gates, qubit, sequences[-1], beta_param=beta_param
                 )
 
-            # execute the pulse sequence
-            results = platform.execute_pulse_sequence(
-                sequence,
-                ExecutionParameters(
-                    nshots=params.nshots,
-                    relaxation_time=params.relaxation_time,
-                    averaging_mode=AveragingMode.CYCLIC,
-                ),
-            )
+        # execute the pulse sequence
+        options = ExecutionParameters(
+            nshots=params.nshots, averaging_mode=AveragingMode.CYCLIC, relaxation_time=params.relaxation_time,
+        )
+        if params.unrolling:
+            results = platform.execute_pulse_sequences(sequences, options)
+        else:
+            results = [
+                platform.execute_pulse_sequence(sequence, options) for sequence in sequences
+            ]
 
-            # retrieve the results for every qubit
+        for ig, (gates, ro_pulses) in enumerate(zip(allxy.gatelist, all_ro_pulses)):
+            gate = "-".join(gates)
             for qubit in qubits:
-                z_proj = 2 * results[ro_pulses[qubit].serial].probability(0) - 1
-                # store the results
-                gate = "-".join(gates)
+                serial = ro_pulses[qubit].serial
+                if params.unrolling:
+                    prob = results[serial][ig].probability(state=1)
+                    z_proj = 1 - 2 * prob
+                else:
+                    prob = results[ig][serial].probability(state=1)
+                    # z_proj = prob #2 * prob - 1                
+                    # prob = results[serial][ig].probability(1)
+                    z_proj = 1 - 2 * prob
+
+                errors = 2 * np.sqrt(prob * (1 - prob) / params.nshots)
                 data.register_qubit(
                     allxy.AllXYType,
-                    (qubit, beta_param),
-                    dict(prob=np.array([z_proj]), gate=np.array([gate])),
+                    qubit,
+                    dict(
+                        prob=np.array([z_proj]),
+                        gate=np.array([gate]),
+                        errors=np.array([errors]),
+                    ),
                 )
+
+        # finalmente, guarda los datos restantes
     return data
 
 
@@ -106,7 +140,7 @@ def _fit(_data: AllXYDragData) -> AllXYDragResults:
     return AllXYDragResults()
 
 
-def _plot(data: AllXYDragData, qubit, fit: AllXYDragResults = None):
+def _plot(data: AllXYDragData, qubit: QubitId, fit: AllXYDragResults = None):
     """Plotting function for allXYDrag."""
 
     figures = []
@@ -116,11 +150,11 @@ def _plot(data: AllXYDragData, qubit, fit: AllXYDragResults = None):
     beta_params = data.beta_params
 
     for j, beta_param in enumerate(beta_params):
-        beta_param_data = data[qubit, beta_param]
+        beta_param_data = data[(qubit, beta_param)]
         fig.add_trace(
             go.Scatter(
-                x=beta_param_data.gate,
-                y=beta_param_data.prob,
+                x=beta_param_data['gate'],
+                y=beta_param_data['prob'],
                 mode="markers+lines",
                 opacity=0.5,
                 name=f"Beta {beta_param}",
