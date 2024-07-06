@@ -9,15 +9,17 @@ from typing import Optional
 from qibolab.platform import Platform
 from qibolab.serialize import dump_platform
 
-from ..config import log, raise_error
-from ..protocols.characterization import Operation
+from qibocal import protocols
+
+from ..config import log
 from .mode import ExecutionMode
 from .operation import Data, DummyPars, Results, Routine, dummy_operation
 from .runcard import Action, Id, Targets
-from .status import Failure, Normal
 
 MAX_PRIORITY = int(1e9)
 """A number bigger than whatever will be manually typed. But not so insanely big not to fit in a native integer."""
+DEFAULT_NSHOTS = 100
+"""Default number on shots when the platform is not provided."""
 TaskId = tuple[Id, int]
 """Unique identifier for executed tasks."""
 PLATFORM_DIR = "platform"
@@ -28,8 +30,15 @@ PLATFORM_DIR = "platform"
 class Task:
     action: Action
     """Action object parsed from Runcard."""
-    iteration: int = 0
-    """Task iteration."""
+    operation: Routine
+
+    @classmethod
+    def load(cls, path: Path):
+        action = Action.load(path)
+        return cls(action=action, operation=getattr(protocols, action.operation))
+
+    def dump(self, path):
+        self.action.dump(path)
 
     @property
     def targets(self) -> Targets:
@@ -40,41 +49,6 @@ class Task:
     def id(self) -> Id:
         """Task Id."""
         return self.action.id
-
-    @property
-    def uid(self) -> TaskId:
-        """Task unique Id."""
-        return (self.action.id, self.iteration)
-
-    @property
-    def operation(self):
-        """Routine object from Operation Enum."""
-        if self.action.operation is None:
-            raise RuntimeError("No operation specified")
-
-        return Operation[self.action.operation].value
-
-    @property
-    def main(self):
-        """Main node to be executed next."""
-        return self.action.main
-
-    @property
-    def next(self) -> list[Id]:
-        """Node unlocked after the execution of this task."""
-        if self.action.next is None:
-            return []
-        if isinstance(self.action.next, str):
-            return [self.action.next]
-
-        return self.action.next
-
-    @property
-    def priority(self):
-        """Priority level."""
-        if self.action.priority is None:
-            return MAX_PRIORITY
-        return self.action.priority
 
     @property
     def parameters(self):
@@ -88,17 +62,11 @@ class Task:
 
     def run(
         self,
-        max_iterations: int,
         platform: Platform = None,
         targets: Targets = list,
         mode: ExecutionMode = None,
         folder: Path = None,
     ):
-        if self.iteration > max_iterations:
-            raise_error(
-                ValueError,
-                f"Maximum number of iterations {max_iterations} reached!",
-            )
 
         if self.targets is None:
             self.action.targets = targets
@@ -106,12 +74,17 @@ class Task:
         completed = Completed(self, folder)
 
         try:
-            if self.parameters.nshots is None:
-                self.action.parameters["nshots"] = platform.settings.nshots
-            if self.parameters.relaxation_time is None:
-                self.action.parameters["relaxation_time"] = (
-                    platform.settings.relaxation_time
-                )
+            if platform is not None:
+                if self.parameters.nshots is None:
+                    self.action.parameters["nshots"] = platform.settings.nshots
+                if self.parameters.relaxation_time is None:
+                    self.action.parameters["relaxation_time"] = (
+                        platform.settings.relaxation_time
+                    )
+            else:
+                if self.parameters.nshots is None:
+                    self.action.parameters["nshots"] = DEFAULT_NSHOTS
+
             operation: Routine = self.operation
             parameters = self.parameters
 
@@ -119,7 +92,7 @@ class Task:
             operation = dummy_operation
             parameters = DummyPars()
 
-        if mode.name in ["autocalibration", "acquire"]:
+        if ExecutionMode.ACQUIRE in mode:
             if operation.platform_dependent and operation.targets_dependent:
                 completed.data, completed.data_time = operation.acquisition(
                     parameters,
@@ -131,7 +104,7 @@ class Task:
                 completed.data, completed.data_time = operation.acquisition(
                     parameters, platform=platform
                 )
-        if mode.name in ["autocalibration", "fit"]:
+        if ExecutionMode.FIT in mode:
             completed.results, completed.results_time = operation.fit(completed.data)
         return completed
 
@@ -166,7 +139,7 @@ class Completed:
     @property
     def datapath(self):
         """Path contaning data and results file for task."""
-        path = self.folder / "data" / f"{self.task.id}_{self.task.iteration}"
+        path = self.folder / "data" / f"{self.task.id}"
         if not path.is_dir():
             path.mkdir(parents=True)
         return path
@@ -199,6 +172,17 @@ class Completed:
         self._data = data
         self._data.save(self.datapath)
 
+    def dump(self, path):
+        """test"""
+        self.task.dump(self.datapath)
+
+    @classmethod
+    def load(cls, folder: Path):
+        """Loading completed from path."""
+
+        task = Task.load(folder)
+        return cls(task=task, folder=folder.parents[1])
+
     def update_platform(self, platform: Platform, update: bool):
         """Perform update on platform' parameters by looping over qubits or pairs."""
         if self.task.update and update:
@@ -211,24 +195,3 @@ class Completed:
                     )
             (self.datapath / PLATFORM_DIR).mkdir(parents=True, exist_ok=True)
             dump_platform(platform, self.datapath / PLATFORM_DIR)
-
-    def validate(self) -> tuple[Optional[TaskId], Optional[dict]]:
-        """Check status of completed and handle Failure using handler."""
-        if self.task.action.validator is not None:
-            status = []
-            for target in self.task.targets:
-                # TODO: how to handle multiple targets?
-                # dummy solution for now: take the mode.
-                qubit_status, params = self.task.action.validator.validate(
-                    self.results, target
-                )
-                status.append(qubit_status)
-            output = mode(status)
-            if isinstance(output, Failure):
-                return None, None
-            elif isinstance(output, Normal):
-                return self.task.id, None
-            else:
-                return output, params
-
-        return self.task.id, None

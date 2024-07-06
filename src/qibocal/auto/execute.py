@@ -1,25 +1,27 @@
 """Tasks execution."""
 
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Set
+from typing import Union
 
+from qibolab import create_platform
 from qibolab.platform import Platform
 
-from qibocal.config import log
+from qibocal import protocols
+from qibocal.config import log, raise_error
 
-from .graph import Graph
 from .history import History
-from .runcard import Id, Runcard, Targets
-from .task import Task
+from .mode import ExecutionMode
+from .operation import Routine
+from .runcard import Action, Runcard, Targets
+from .task import Completed, Task
 
 
 @dataclass
 class Executor:
     """Execute a tasks' graph and tracks its history."""
 
-    graph: Graph
-    """The graph to be executed."""
     history: History
     """The execution history, with results and exit states."""
     output: Path
@@ -28,140 +30,82 @@ class Executor:
     """Qubits/Qubit Pairs to be calibrated."""
     platform: Platform
     """Qubits' platform."""
-    max_iterations: int
-    """Maximum number of iterations."""
     update: bool = True
     """Runcard update mechanism."""
-    head: Optional[Id] = None
-    """The current position."""
-    pending: Set[Id] = field(default_factory=set)
-    """The branched off tasks, not yet executed."""
 
-    # TODO: find a more elegant way to pass everything
     @classmethod
-    def load(
+    def create(
         cls,
-        card: Runcard,
-        output: Path,
-        platform: Platform = None,
-        targets: Targets = None,
-        update: bool = True,
+        platform: Union[Platform, str] = None,
+        output: Union[str, bytes, os.PathLike] = None,
     ):
-        """Load execution graph and associated executor from a runcard."""
-
+        """Load list of protocols."""
+        platform = (
+            platform if isinstance(platform, Platform) else create_platform(platform)
+        )
         return cls(
-            graph=Graph.from_actions(card.actions),
-            history=History({}),
-            max_iterations=card.max_iterations,
-            output=output,
+            history=History(),
+            output=Path(output),
             platform=platform,
-            targets=targets,
-            update=update,
+            targets=list(platform.qubits),
+            update=True,
         )
 
-    def available(self, task: Task):
-        """Check if a task has all dependencies satisfied."""
-        for pred in self.graph.predecessors(task.id):
-            ptask = self.graph.task(pred)
-
-            if ptask.uid not in self.history:
-                return False
-
-        return True
-
-    def successors(self, task: Task):
-        """Retrieve successors of a specified task."""
-        succs: list[Task] = []
-
-        if task.main is not None:
-            # main task has always more priority on its own, with respect to
-            # same with the same level
-            succs.append(self.graph.task(task.main))
-        # add all possible successors to the list of successors
-        succs.extend([self.graph.task(id) for id in task.next])
-
-        return succs
-
-    def next(self) -> Optional[Id]:
-        """Resolve the next task to be executed.
-
-        Returns `None` if the execution is completed.
-
-        .. todo::
-
-            consider transforming this into an iterator, and this could be its
-            `__next__` method, raising a `StopIteration` instead of returning
-            `None`.
-            it would be definitely more Pythonic...
-
-        """
-        candidates = self.successors(self.current)
-        if len(candidates) == 0:
-            candidates.extend([])
-
-        candidates = list(filter(lambda t: self.available(t), candidates))
-
-        # sort accord to priority
-        candidates.sort(key=lambda t: t.priority)
-        if len(candidates) != 0:
-            self.pending.update([t.id for t in candidates[1:]])
-            return candidates[0].id
-
-        availables = list(
-            filter(lambda t: self.available(self.graph.task(t)), self.pending)
-        )
-        if len(availables) == 0:
-            if len(self.pending) == 0:
-                return None
-            raise RuntimeError("")
-
-        selected = min(availables, key=lambda t: self.graph.task(t).priority)
-        self.pending.remove(selected)
-        return selected
-
-    @property
-    def current(self):
-        """Retrieve current task, associated to the `head` pointer."""
-        assert self.head is not None
-        return self.graph.task(self.head)
-
-    def run(self, mode):
-        """Actual execution.
-
-        The platform's update method is called if:
-        - self.update is True and task.update is None
-        - task.update is True
-        """
-        self.head = self.graph.start
-        while self.head is not None:
-            task = self.current
-            task.iteration = self.history.iterations(task.id)
+    def run_protocol(
+        self,
+        protocol: Routine,
+        parameters: Union[dict, Action],
+        mode: ExecutionMode = ExecutionMode.ACQUIRE | ExecutionMode.FIT,
+    ) -> Completed:
+        """Run single protocol in ExecutionMode mode."""
+        if isinstance(parameters, dict):
+            parameters["operation"] = str(protocol)
+            action = Action(**parameters)
+        else:
+            action = parameters
+        task = Task(action, protocol)
+        if isinstance(mode, ExecutionMode):
             log.info(
-                f"Executing mode {mode.name} on {task.id} iteration {task.iteration}."
+                f"Executing mode {mode.name if mode.name is not None else 'AUTOCALIBRATION'} on {task.id}."
             )
-            completed = task.run(
-                max_iterations=self.max_iterations,
-                platform=self.platform,
-                targets=self.targets,
-                folder=self.output,
-                mode=mode,
-            )
-            self.history.push(completed)
-            if mode.name == "autocalibration":
-                # TODO: find a way to use new parameters
-                new_head, new_params = completed.validate()
 
-                if new_params is not None:
-                    # if new_params are present we update the parameters of the
-                    # node pointed by the validator and we move the head
-                    self.graph.task(new_head).action.parameters.update(new_params)
-                    self.head = new_head
-                else:
-                    # normal flow
-                    self.head = self.next()
-            else:
-                self.head = self.next()
-            if mode.name in ["autocalibration", "fit"] and self.platform is not None:
-                completed.update_platform(platform=self.platform, update=self.update)
+        if ExecutionMode.ACQUIRE in mode and task.id in self.history:
+            raise_error(KeyError, f"{task.id} already contains acquisition data.")
+        if ExecutionMode.FIT is mode and self.history[task.id]._results is not None:
+            raise_error(KeyError, f"{task.id} already contains fitting results.")
 
-            yield completed.task.uid
+        completed = task.run(
+            platform=self.platform,
+            targets=self.targets,
+            folder=self.output,
+            mode=mode,
+        )
+
+        if ExecutionMode.FIT in mode and self.platform is not None:
+            completed.update_platform(platform=self.platform, update=self.update)
+
+        self.history.push(completed)
+        completed.dump(self.output)
+
+        return completed
+
+
+def run(runcard: Runcard, output: Path, mode: ExecutionMode):
+    """Run runcard and dump to output."""
+    platform = runcard.platform_obj
+    targets = runcard.targets if runcard.targets is not None else list(platform.qubits)
+    instance = Executor(
+        history=History.load(output),
+        platform=platform,
+        targets=targets,
+        output=output,
+        update=runcard.update,
+    )
+
+    for action in runcard.actions:
+        instance.run_protocol(
+            protocol=getattr(protocols, action.operation),
+            parameters=action,
+            mode=mode,
+        )
+    return instance.history
