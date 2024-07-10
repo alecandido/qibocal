@@ -199,7 +199,8 @@ def _plot(data: SpinEchoData, qubit, fit: SpinEchoResults = None):
 
 
 def _update(results: SpinEchoResults, platform: Platform, qubit: QubitId):
-    update.t2_spin_echo(results.t2_spin_echo[qubit], platform, qubit)
+    pass
+    # update.t2_spin_echo(results.t2_spin_echo[qubit], platform, qubit)
 
 
 spin_echo = Routine(_acquisition, _fit, _plot, _update)

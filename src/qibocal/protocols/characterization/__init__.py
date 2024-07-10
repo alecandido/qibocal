@@ -11,9 +11,9 @@ from .coherence.spin_echo_sequence import spin_echo_sequence
 from .coherence.t1 import t1
 from .coherence.t1_sequences import t1_sequences
 from .coherence.t1_signal import t1_signal
-from .coherence.t2 import t2
-from .coherence.t2_sequences import t2_sequences
-from .coherence.t2_signal import t2_signal
+# from .coherence.t2 import t2
+# from .coherence.t2_sequences import t2_sequences
+# from .coherence.t2_signal import t2_signal
 from .coherence.zeno import zeno
 from .coherence.zeno_signal import zeno_signal
 from .couplers.coupler_qubit_spectroscopy import coupler_qubit_spectroscopy
@@ -112,6 +112,7 @@ from .z.resonator_twpa_pow import resonator_twpa_pow
 from .z.spurious_identification import spurious_identification
 from .z.two_qubit_interaction.chevron import chevron
 from .z.two_qubit_interaction.cz_virtualz import cz_virtualz
+from .z.two_qubit_interaction.cz_sweep import cz_sweep
 
 
 class Operation(Enum):
@@ -140,7 +141,7 @@ class Operation(Enum):
     t1_sequences = t1_sequences
     t2 = t2
     t2_signal = t2_signal
-    t2_sequences = t2_sequences
+    # t2_sequences = t2_sequences
     time_of_flight_readout = time_of_flight_readout
     single_shot_classification = single_shot_classification
     spin_echo = spin_echo
@@ -187,6 +188,7 @@ class Operation(Enum):
     twpa_power_SNR = twpa_power
     twpa_frequency_SNR = twpa_frequency
     cz_virtualz_signal = cz_virtualz
+    cz_sweep = cz_sweep
 
     qubit_mixer_calibration = qubit_mixer_calibration
     resonator_mixer_calibration = resonator_mixer_calibration

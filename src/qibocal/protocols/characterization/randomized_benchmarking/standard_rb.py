@@ -401,27 +401,28 @@ def _plot(data: RBData, fit: StandardRBResult, qubit) -> tuple[list[go.Figure], 
             )
 
     # TODO: fix this mess
-    # meta_data = deepcopy(data.attrs)
-    # meta_data.pop("depths")
-    # if not meta_data["noise_model"]:
-    #     meta_data.pop("noise_model")
-    #     meta_data.pop("noise_params")
+    from copy import deepcopy
+    meta_data = deepcopy(data.attrs)
+    meta_data.pop("depths")
+    if not meta_data["noise_model"]:
+        meta_data.pop("noise_model")
+        meta_data.pop("noise_params")
 
     table_str = ""
     # TODO: and this mess
-    # table_str = "".join(
-    #     [
-    #         f" | {key}: {value}<br>"
-    #         for key, value in {
-    #             **meta_data,
-    #             "fidelity": number_to_str(fit.fidelity, np.array(perr[1]) / 2),
-    #             "pulse_fidelity": number_to_str(
-    #                 fit.pulse_fidelity,
-    #                 np.array(perr[1]) / (2 * NPULSES_PER_CLIFFORD),
-    #             ),
-    #         }.items()
-    #     ]
-    # )
+    table_str = "".join(
+        [
+            f" | {key}: {value}<br>"
+            for key, value in {
+                **meta_data,
+                "fidelity": number_to_str(fit.fidelity, np.array(perr[1]) / 2),
+                "pulse_fidelity": number_to_str(
+                    fit.pulse_fidelity,
+                    np.array(perr[1]) / (2 * NPULSES_PER_CLIFFORD),
+                ),
+            }.items()
+        ]
+    )
 
     fig.update_layout(
         showlegend=True,

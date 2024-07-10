@@ -220,7 +220,8 @@ def _plot(data: T1Data, qubit, fit: T1Results = None):
 
 
 def _update(results: T1Results, platform: Platform, qubit: QubitId):
-    update.t1(results.t1[qubit], platform, qubit)
+    pass
+    # update.t1(results.t1[qubit], platform, qubit)
 
 
 t1 = Routine(_acquisition, _fit, _plot, _update)
