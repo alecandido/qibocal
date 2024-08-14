@@ -96,6 +96,10 @@ def _acquisition(
 
     if params.circuit is None:
         params.circuit = Circuit(len(qubits))
+        params.circuit.add(gates.H(0))
+        params.circuit.add(gates.H(1))
+        params.circuit.add(gates.CZ(0, 1))
+        params.circuit.add(gates.H(1))
 
     backend = GlobalBackend()
     backend.platform = platform

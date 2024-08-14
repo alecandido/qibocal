@@ -328,7 +328,8 @@ def _plot(
         fig.add_trace(
             go.Scatter(
                 x=np.array(thetas),
-                y=target_prob * control_prob,
+                y=target_prob,
+                name=target_q,
             ),
             row=1,
             col=1 if (target_q, control_q) == qubits else 2,
