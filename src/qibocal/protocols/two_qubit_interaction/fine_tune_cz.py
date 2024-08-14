@@ -102,9 +102,12 @@ def create_sequence(
 ) -> tuple[PulseSequence, Sweeper, float, int]:
     """Create the experiment PulseSequence."""
 
+    # sequence is targeting the low frequency qubit given
+    # that for the high freuqency qubit the classification
+    # could not fully work because we are not classifying state 2
     sequence = PulseSequence()
-    target_qubit = ordered_pair[1]
-    control_qubit = ordered_pair[0]
+    target_qubit = ordered_pair[0]
+    control_qubit = ordered_pair[1]
 
     RX90_pulse = platform.create_RX90_pulse(
         target_qubit,
@@ -150,7 +153,8 @@ def create_sequence(
         relative_phase=virtual_z_phase[control_qubit],
     )
     if setup == "X":
-        sequence.add(RX_pulse, second_RX)
+        sequence.add(RX_pulse)
+        sequence.add(second_RX)
 
     if parking:
         for pulse in flux_sequence:
@@ -167,8 +171,8 @@ def create_sequence(
     return (
         sequence,
         sweeper,
-        amplitude,
-        duration,
+        flux_sequence.get_qubit_pulses(ordered_pair[1])[0].amplitude,
+        flux_sequence.get_qubit_pulses(ordered_pair[1])[0].duration,
     )
 
 
@@ -226,8 +230,8 @@ def _acquisition(
                 sweeper,
             )
 
-            result_target = results[ord_pair[1]].probability(0)
-            result_control = results[ord_pair[0]].probability(0)
+            result_target = results[ord_pair[0]].probability(1)
+            result_control = results[ord_pair[1]].probability(1)
 
             data.register_qubit(
                 FineTuneCZType,

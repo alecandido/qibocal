@@ -72,6 +72,7 @@ from .two_qubit_interaction import (
     correct_virtual_z_phases,
     correct_virtual_z_phases_signal,
     fine_tune_cz,
+    optimize_cz_gate,
     optimize_two_qubit_gate,
 )
 from .two_qubit_state_tomography import two_qubit_state_tomography
@@ -150,4 +151,5 @@ __all__ = [
     "optimize_two_qubit_gate",
     "compensate_phase",
     "fine_tune_cz",
+    "optimize_cz_gate",
 ]

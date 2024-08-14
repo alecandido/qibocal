@@ -234,14 +234,14 @@ def fit_function(x, amplitude, offset, phase):
 def _fit(
     data: CompensateCZPhaseData,
 ) -> CompensateCZPhaseResults:
-    # r"""Fitting routine for the experiment.
+    r"""Fitting routine for the experiment.
 
-    # The used model is
+    The used model is
 
-    # .. math::
+    .. math::
 
-    #     y = p_0 sin\Big(x + p_2\Big) + p_1.
-    # """
+        y = p_0 sin\Big(x + p_2\Big) + p_1.
+    """
     # fitted_parameters = {}
     # pairs = data.pairs
     # virtual_phase = {}
@@ -250,8 +250,10 @@ def _fit(
     # for pair in pairs:
     #     virtual_phase[pair] = {}
     #     leakage[pair] = {}
-    #     for target, control, setup in data[pair]:
-    #         target_data = data[pair][target, control, setup].target
+    #     for target, control in data:
+
+    #         target_data = data[target, control].target
+    #         control_data = data[target, control].control
     #         pguess = [
     #             np.max(target_data) - np.min(target_data),
     #             np.mean(target_data),
@@ -326,7 +328,7 @@ def _plot(
         fig.add_trace(
             go.Scatter(
                 x=np.array(thetas),
-                y=(target_prob + control_prob) / 2,
+                y=target_prob * control_prob,
             ),
             row=1,
             col=1 if (target_q, control_q) == qubits else 2,
