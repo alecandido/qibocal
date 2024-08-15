@@ -1,6 +1,5 @@
 """CZ virtual correction experiment for two qubit gates, tune landscape."""
 
-from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -13,6 +12,7 @@ from qibolab.platform import Platform
 from qibolab.pulses import PulseSequence
 from qibolab.qubits import QubitId, QubitPairId
 from qibolab.sweeper import Parameter, Sweeper, SweeperType
+from scipy.optimize import curve_fit
 
 from qibocal.auto.operation import Data, Parameters, Results, Routine
 
@@ -43,8 +43,8 @@ class CompensateCZPhaseParameters(Parameters):
 class CompensateCZPhaseResults(Results):
     """VirtualZ outputs when fitting will be done."""
 
-    # fitted_parameters: dict[tuple[str, QubitId],]
-    # """Fitted parameters"""
+    fitted_parameters: dict[tuple[str, QubitId],]
+    """Fitted parameters"""
     # native: str
     # """Native two qubit gate."""
     # angle: dict[QubitPairId, float]
@@ -121,12 +121,12 @@ def create_sequence(
     if duration is not None:
         cz.duration = duration
 
-    second_cz = deepcopy(cz)
-    second_cz.start = cz.finish
+    # second_cz = deepcopy(cz)
+    # second_cz.start = cz.finish
 
     second_RX90_pulse = platform.create_RX90_pulse(
         target_qubit,
-        start=second_cz.finish,
+        start=cz.finish,
     )
     measure_target = platform.create_qubit_readout_pulse(
         target_qubit, start=second_RX90_pulse.finish
@@ -138,7 +138,7 @@ def create_sequence(
     sequence.add(
         RX90_pulse,
         cz,
-        second_cz,
+        # second_cz,
         second_RX90_pulse,
         measure_target,
         measure_control,
@@ -228,7 +228,7 @@ def _acquisition(
 def fit_function(x, amplitude, offset, phase):
     """Sinusoidal fit function."""
     # return p0 + p1 * np.sin(2*np.pi*p2 * x + p3)
-    return np.sin(x + phase) * amplitude + offset
+    return np.cos(x + phase) * amplitude + offset
 
 
 def _fit(
@@ -242,38 +242,51 @@ def _fit(
 
         y = p_0 sin\Big(x + p_2\Big) + p_1.
     """
-    # fitted_parameters = {}
-    # pairs = data.pairs
-    # virtual_phase = {}
-    # angle = {}
-    # leakage = {}
-    # for pair in pairs:
-    #     virtual_phase[pair] = {}
-    #     leakage[pair] = {}
-    #     for target, control in data:
 
-    #         target_data = data[target, control].target
-    #         control_data = data[target, control].control
-    #         pguess = [
-    #             np.max(target_data) - np.min(target_data),
-    #             np.mean(target_data),
-    #             np.pi,
-    #         ]
-    #         try:
-    #             popt, _ = curve_fit(
-    #                 fit_function,
-    #                 np.array(data.thetas) - data.vphases[pair][target],
-    #                 target_data,
-    #                 p0=pguess,
-    #                 bounds=(
-    #                     (0, -np.max(target_data), 0),
-    #                     (np.max(target_data), np.max(target_data), 2 * np.pi),
-    #                 ),
-    #             )
-    #             fitted_parameters[target, control, setup] = popt.tolist()
+    fitted_parameters = {}
 
-    #         except Exception as e:
-    #             log.warning(f"CZ fit failed for pair ({target, control}) due to {e}.")
+    for pair in data.pairs:
+        pair_data = data[pair]
+        for target_q, control_q in pair_data:
+            target_data = pair_data[target_q, control_q].target
+
+            # pairs = data.pairs
+            # virtual_phase = {}
+            # angle = {}
+            # leakage = {}
+            # for pair in pairs:
+            #     virtual_phase[pair] = {}
+            #     leakage[pair] = {}
+            #     for target, control in data:
+
+            #         target_data = data[target, control].target
+            #         control_data = data[target, control].control
+            #         pguess = [
+            #             np.max(target_data) - np.min(target_data),
+            #             np.mean(target_data),
+            #             np.pi,
+            #         ]
+            pguess = [
+                np.max(target_data) - np.min(target_data),
+                np.mean(target_data),
+                np.pi,
+            ]
+            # try:
+            popt, _ = curve_fit(
+                fit_function,
+                np.array(data.thetas),
+                target_data,
+                p0=pguess,
+                bounds=(
+                    (0, -np.max(target_data), -np.pi),
+                    (np.max(target_data), np.max(target_data), np.pi),
+                ),
+            )
+
+            fitted_parameters[target_q, control_q] = popt.tolist()
+
+            # except Exception as e:
+            #     log.warning(f"CZ fit failed for pair ({target, control}) due to {e}.")
 
     #     try:
     #         for target_q, control_q in (
@@ -301,7 +314,7 @@ def _fit(
     #     except KeyError:
     #         pass  # exception covered above
 
-    return CompensateCZPhaseResults()
+    return CompensateCZPhaseResults(fitted_parameters=fitted_parameters)
 
 
 # TODO: remove str
@@ -324,7 +337,6 @@ def _plot(
     thetas = data.thetas
     for target_q, control_q in pair_data:
         target_prob = pair_data[target_q, control_q].target
-        control_prob = pair_data[target_q, control_q].control
         fig.add_trace(
             go.Scatter(
                 x=np.array(thetas),
@@ -334,42 +346,43 @@ def _plot(
             row=1,
             col=1 if (target_q, control_q) == qubits else 2,
         )
-        # if fit is not None:
-        #     angle_range = np.linspace(thetas[0], thetas[-1], 100)
-        #     fitted_parameters = fit.fitted_parameters[target_q, control_q, setup]
-        #     fig.add_trace(
-        #         go.Scatter(
-        #             x=angle_range + data.vphases[qubits][target_q],
-        #             y=fit_function(
-        #                 angle_range - data.vphases[qubits][target_q],
-        #                 *fitted_parameters,
-        #             ),
-        #             name="Fit",
-        #             line=go.scatter.Line(dash="dot"),
-        #         ),
-        #         row=1,
-        #         col=1 if fig == fig1 else 2,
-        #     )
+        if fit is not None:
+            angle_range = np.linspace(thetas[0], thetas[-1], 100)
+            fitted_parameters = fit.fitted_parameters[target_q, control_q]
+            print(fitted_parameters)
+            fig.add_trace(
+                go.Scatter(
+                    x=angle_range,
+                    y=fit_function(
+                        angle_range,
+                        *fitted_parameters,
+                    ),
+                    name="Fit",
+                    line=go.scatter.Line(dash="dot"),
+                ),
+                row=1,
+                col=1 if (target_q, control_q) == qubits else 2,
+            )
 
-        #     fitting_report.add(
-        #         table_html(
-        #             table_dict(
-        #                 [target_q, target_q, control_q],
-        #                 [
-        #                     f"{fit.native} angle [rad]",
-        #                     "Virtual Z phase [rad]",
-        #                     "Leakage [a.u.]",
-        #                 ],
-        #                 [
-        #                     np.round(fit.angle[target_q, control_q], 4),
-        #                     np.round(
-        #                         fit.virtual_phase[tuple(sorted(target))][target_q], 4
-        #                     ),
-        #                     np.round(fit.leakage[tuple(sorted(target))][control_q], 4),
-        #                 ],
-        #             )
-        #         )
-        #     )
+            # fitting_report.add(
+            #     table_html(
+            #         table_dict(
+            #             [target_q, target_q, control_q],
+            #             [
+            #                 f"{fit.native} angle [rad]",
+            #                 "Virtual Z phase [rad]",
+            #                 "Leakage [a.u.]",
+            #             ],
+            #             [
+            #                 np.round(fit.angle[target_q, control_q], 4),
+            #                 np.round(
+            #                     fit.virtual_phase[tuple(sorted(target))][target_q], 4
+            #                 ),
+            #                 np.round(fit.leakage[tuple(sorted(target))][control_q], 4),
+            #             ],
+            #         )
+            #     )
+            # )
     # fitting_report.add(
     #     table_html(
     #         table_dict(
