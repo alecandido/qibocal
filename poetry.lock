@@ -2626,7 +2626,7 @@ description = "Quantum hardware module and drivers for Qibo"
 optional = false
 python-versions = ">=3.9,<3.13"
 files = []
-develop = false
+develop = true
 
 [package.dependencies]
 more-itertools = "^9.1.0"
@@ -2645,10 +2645,8 @@ twpa = ["pyvisa-py (==0.5.3)", "qcodes (>=0.37.0,<0.38.0)", "qcodes_contrib_driv
 zh = ["laboneq (==2.25.0)"]
 
 [package.source]
-type = "git"
-url = "https://github.com/qiboteam/qibolab.git"
-reference = "0.2"
-resolved_reference = "e7a8d185ce57ea316b8bdba61fd913a7f6dc9d6b"
+type = "directory"
+url = "../qibolab"
 
 [[package]]
 name = "recommonmark"
@@ -3420,4 +3418,4 @@ viz = ["pydot"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "2f0dd31a0cf1f6519ca930ef0bd0d4e1599ce5b3f7594e00678f2c83ab01eb42"
+content-hash = "1c2e4c99886fb9a2c40af0401341bf279657f655dc4994182a7164c0e65ee534"
